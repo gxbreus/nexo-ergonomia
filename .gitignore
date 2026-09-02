@@ -15,6 +15,8 @@
 .DS_Store
 *.pem
 *.tsbuildinfo
+/.vinext/
+next-env.d.ts
 
 # debug
 npm-debug.log*
