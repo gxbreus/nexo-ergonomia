@@ -1,7 +1,6 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import Image from 'next/image';
 import {
   Activity, ArrowLeft, BarChart3, Bell, BriefcaseBusiness, Building2, Check,
   ChevronRight, CircleHelp, ClipboardCheck, FileHeart, Filter,
@@ -23,7 +22,7 @@ const normalize = (value:string) => value.normalize('NFD').replace(/[\u0300-\u03
 const initials = (value:string) => value.split(' ').map((word) => word[0]).join('').slice(0,2);
 
 function Brand() {
-  return <div className="brand"><Image className="brand-mark" src="/nexo-logo-light.svg" alt="" width={39} height={41} priority /><div><strong>NEXO</strong><span>Ergonomia inteligente</span></div></div>;
+  return <div className="brand"><img className="brand-mark" src="/nexo-logo-light.svg" alt="" width={39} height={41} /><div><strong>NEXO</strong><span>Ergonomia inteligente</span></div></div>;
 }
 
 function NavButton({ active, icon, label, count, onClick }:{ active:boolean;icon:React.ReactNode;label:string;count?:number;onClick:()=>void }) {
@@ -114,7 +113,7 @@ function Drawer({ overlay, close, notify }:{ overlay:NonNullable<Overlay>;close:
   </div>{overlay.mode!=='analytics'&&<footer className="drawer-footer"><button className="ghost-button" onClick={close}>{overlay.mode==='view'?'Voltar':'Cancelar'}</button>{overlay.mode==='view'?<><button className="secondary-button" onClick={()=>notify('Histórico aberto no protótipo.')}><RotateCcw size={14}/>Histórico</button><button className="primary-button" onClick={()=>notify('Modo de edição disponível pela listagem.')}><Pencil size={14}/>Editar</button></>:overlay.entity==='cases'?<><button className="secondary-button" onClick={()=>save('Rascunho salvo com sucesso.')}><ClipboardCheck size={14}/>Salvar rascunho</button><button className="primary-button" onClick={()=>save('Caso concluído com sucesso.')}><Check size={15}/>Concluir caso</button></>:<button className="primary-button" onClick={()=>save(`${isCreate?'Cadastro realizado':'Alterações salvas'} com sucesso.`)}><Check size={15}/>{isCreate?'Adicionar':'Salvar alterações'}</button>}</footer>}</aside></div>;
 }
 
-export default function Home(){
+export default function App(){
   const [view,setView]=useState<View>('cases'); const [query,setQuery]=useState(''); const [status,setStatus]=useState('Todos'); const [overlay,setOverlay]=useState<Overlay>(null); const [toast,setToast]=useState(''); const copy=viewCopy[view];
   const navigate=(next:View)=>{ setView(next);setQuery('');setStatus('Todos'); };
   const notify=(message:string)=>{ setToast(message);window.setTimeout(()=>setToast(''),2800); };
