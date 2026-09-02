@@ -15,7 +15,7 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: 'NEXO | Ergonomia inteligente',
   description: 'Gestão ergonômica de casos, empresas, doenças e lesões.',
-  metadataBase: new URL('http://localhost:3000'),
+  metadataBase: new URL('https://nexo-ergonomia-prototipo.balmy-isle-8571.chatgpt.site'),
   openGraph: {
     title: 'NEXO | Ergonomia inteligente',
     description: 'Gestão ergonômica de casos, empresas, doenças e lesões.',
