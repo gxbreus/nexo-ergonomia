@@ -47,6 +47,7 @@ export function CompanyWorkflow({
   );
   const [addSector, setAddSector] = useState(Boolean(item?.sectors?.length));
   const [sectors, setSectors] = useState<SectorEntry[]>(item?.sectors ?? []);
+  const [error, setError] = useState('');
   const eligibleCases = cases.filter(
     (entry) => !entry.company || linked.includes(entry.id),
   );
@@ -55,12 +56,16 @@ export function CompanyWorkflow({
 
   const submit = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    const selected = hasPrevious ? linked : [];
+    if (hasPrevious && !selected.length) { setError('Selecione ao menos um caso prévio ou desative a associação.'); return; }
+    if (addSector && (!sectors.length || sectors.some((sector) => !sector.name.trim() || !sector.caseIds.some((id) => selected.includes(id))))) {
+      setError('Adicione ao menos um setor e informe o nome e os casos associados de cada setor.'); return;
+    }
     if (
       !name.trim() ||
       (addSector && sectors.some((sector) => !sector.name.trim()))
     )
       return;
-    const selected = hasPrevious ? linked : [];
     onSave(
       {
         id: item?.id ?? `EMP-${String(Date.now()).slice(-4)}`,
@@ -83,7 +88,7 @@ export function CompanyWorkflow({
         ).length,
         average: item?.average ?? 0,
         priority: item?.priority ?? 0,
-        sectors: addSector ? sectors : [],
+        sectors: addSector ? sectors.map((sector) => ({ ...sector, name: sector.name.trim(), caseIds: sector.caseIds.filter((id) => selected.includes(id)) })) : [],
       },
       selected,
     );
@@ -91,6 +96,7 @@ export function CompanyWorkflow({
 
   return (
     <form id="companies-form" onSubmit={submit}>
+      {error && <div className="inline-warning" role="alert">{error}</div>}
       <section className="form-section">
         <SectionTitle
           icon={<Building2 size={17} />}
@@ -99,6 +105,7 @@ export function CompanyWorkflow({
         />
         <Field label="Nome fantasia da empresa" required>
           <input
+            required
             disabled={readOnly}
             maxLength={255}
             value={name}

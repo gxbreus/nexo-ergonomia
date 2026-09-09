@@ -1,4 +1,4 @@
-import { useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import {
   Activity,
   AlertTriangle,
@@ -34,6 +34,7 @@ import {
   type ConditionWorkflowRecord,
 } from "./ConditionWorkflow";
 import { bodyRegions } from "./workflowData";
+import { CompanyAnalysis } from "./CompanyAnalysis";
 
 type View = "cases" | "companies" | "conditions";
 type Mode = "create" | "edit" | "view" | "analytics" | "index" | "history";
@@ -86,9 +87,31 @@ const initials = (name: string) =>
     .join("")
     .toUpperCase();
 
+function useStoredRecords<T extends { id: string }>(key: string, seed: T[]) {
+  const [records, setRecords] = useState<T[]>(() => {
+    try {
+      const saved = localStorage.getItem(key);
+      return saved ? JSON.parse(saved) as T[] : seed;
+    } catch { return seed; }
+  });
+  useEffect(() => {
+    const previous: T[] = JSON.parse(localStorage.getItem(key) ?? "[]");
+    for (const record of records) {
+      const old = previous.find((entry) => entry.id === record.id);
+      if (JSON.stringify(old) === JSON.stringify(record)) continue;
+      const historyKey = `nexo-history-${record.id}`;
+      const history = JSON.parse(localStorage.getItem(historyKey) ?? "[]");
+      history.unshift({ date: new Date().toLocaleString("pt-BR"), action: old ? "Cadastro alterado" : "Registro incluído na base local", fields: old ? Object.keys(record).filter((field) => JSON.stringify(record[field as keyof T]) !== JSON.stringify(old[field as keyof T])).join(", ") : "", responsible: "Gabriel Soares" });
+      localStorage.setItem(historyKey, JSON.stringify(history));
+    }
+    localStorage.setItem(key, JSON.stringify(records));
+  }, [key, records]);
+  return [records, setRecords] as const;
+}
+
 export default function App() {
   const [view, setView] = useState<View>("cases");
-  const [caseItems, setCaseItems] = useState<CaseItem[]>([
+  const [caseItems, setCaseItems] = useStoredRecords<CaseItem>("nexo-cases-v3", [
     ...cases,
     {
       id: "CAS-0243",
@@ -101,8 +124,12 @@ export default function App() {
       score: 0,
     },
   ]);
-  const [companyItems, setCompanyItems] = useState<CompanyItem[]>(companies);
-  const [conditionItems, setConditionItems] = useState<ConditionItem[]>(
+  const [companyItems, setCompanyItems] = useStoredRecords<CompanyItem>("nexo-companies-v3", companies);
+  const countedCompanies = companyItems.map((company) => {
+    const linked = caseItems.filter((entry) => entry.company === company.name);
+    return { ...company, total: linked.length, complete: linked.filter((entry) => entry.status === 'Concluído').length, drafts: linked.filter((entry) => entry.status === 'Em cadastro').length };
+  });
+  const [conditionItems, setConditionItems] = useStoredRecords<ConditionItem>("nexo-conditions-v3",
     conditions.map((item) => ({
       ...item,
       type: item.type as "Doença" | "Lesão",
@@ -267,7 +294,7 @@ export default function App() {
             </button>
           </div>
           {view === "cases" && <CaseMetrics items={caseItems} />}
-          {view === "companies" && <CompanyOverview items={companyItems} />}
+          {view === "companies" && <CompanyOverview items={countedCompanies} />}
           {view === "conditions" && <ConditionSummary items={conditionItems} />}
           <section className="content-card">
             <div className="content-toolbar">
@@ -351,7 +378,7 @@ export default function App() {
             )}
             {searched[view] && view === "companies" && (
               <CompanyList
-                items={companyItems}
+                items={countedCompanies}
                 query={query}
                 status={statusFilter}
                 onOpen={open}
@@ -381,7 +408,7 @@ export default function App() {
           companies={companyItems}
           conditions={conditionItems}
           onClose={() => setOverlay(null)}
-          onNavigate={setOverlay}
+          onNavigate={(next) => next ? open(next.entity, next.mode, next.id) : setOverlay(null)}
           onViewCompanyCases={(company) => {
             setView("cases");
             setExtraFilter(company);
@@ -398,7 +425,7 @@ export default function App() {
             );
             if (item.status === "Concluído") {
               setOverlay({ entity: "cases", mode: "index", id: item.id });
-              showToast("Caso concluído e índice calculado.");
+              showToast("Caso concluído e respostas salvas.");
             } else {
               setOverlay(null);
               showToast("Rascunho do caso salvo.");
@@ -433,9 +460,10 @@ export default function App() {
                       ...caseItem,
                       company: item.name,
                       sector: sectorByCase.get(caseItem.id) ?? "",
+                      workflow: caseItem.workflow ? { ...caseItem.workflow, associatedCompany: true, company: item.name, associatedSector: sectorByCase.has(caseItem.id), sector: sectorByCase.get(caseItem.id) ?? "" } : undefined,
                     }
                   : previousCompany && caseItem.company === previousCompany.name
-                    ? { ...caseItem, company: "", sector: "" }
+                    ? { ...caseItem, company: "", sector: "", workflow: caseItem.workflow ? { ...caseItem.workflow, associatedCompany: false, company: "", associatedSector: false, sector: "" } : undefined }
                     : caseItem,
               ),
             );
@@ -473,7 +501,7 @@ export default function App() {
             if (condition)
               setCaseItems((items) =>
                 items.map((item) =>
-                  item.injury === condition.name
+                  (item.injury === condition.name || item.workflow?.conditions.some((entry) => entry.answers.COND03 === condition.name))
                     ? { ...item, status: "Desatualizado" as CaseStatus }
                     : item,
                 ),
@@ -1156,6 +1184,7 @@ function Footer({ count }: { count: number }) {
 }
 
 function CompatibilityIndex({ item }: { item: CaseItem }) {
+  if (item.indexPending && item.status === "Concluído") return <section className="form-section"><h2>Caso concluído</h2><p>As respostas foram salvas. O percentual de compatibilidade aguarda a definição das regras XYZ/XXX mencionadas na US01.</p><h3>Dimensões consideradas</h3>{dimensions.map((dimension) => <p key={dimension.name}>{dimension.name}: aguardando fórmula</p>)}</section>;
   if (item.status !== "Concluído")
     return (
       <div className="index-unavailable">
@@ -1207,6 +1236,7 @@ function CompatibilityIndex({ item }: { item: CaseItem }) {
 }
 
 function ChangeHistory({ entity, itemId }: { entity: string; itemId: string }) {
+  const history = JSON.parse(localStorage.getItem(`nexo-history-${itemId}`) ?? "[]") as { date: string; action: string; responsible: string; fields: string }[];
   return (
     <section className="form-section">
       <SectionTitle
@@ -1215,16 +1245,8 @@ function ChangeHistory({ entity, itemId }: { entity: string; itemId: string }) {
         text={`Registro de mudanças do ${entity} ${itemId}.`}
       />
       <div className="history-list">
-        <article>
-          <span>Hoje · agora</span>
-          <strong>Cadastro atualizado</strong>
-          <p>Alteração realizada por Gabriel Soares.</p>
-        </article>
-        <article>
-          <span>Hoje · início da sessão</span>
-          <strong>Registro carregado no protótipo</strong>
-          <p>Dados demonstrativos disponíveis localmente.</p>
-        </article>
+        {history.map((event, index) => <article key={`${event.date}-${index}`}><span>{event.date}</span><strong>{event.action}</strong><p>{event.responsible}</p>{event.fields && <p>Campos alterados: {event.fields}</p>}</article>)}
+        {!history.length && <p>Não há alterações registradas para este cadastro.</p>}
       </div>
     </section>
   );
@@ -1306,7 +1328,7 @@ function FullScreenForm({
         <div className="drawer-body">
           <div className="full-form-shell">
             {overlay.mode === "analytics" && item && (
-              <Analytics item={item as CompanyItem} onClose={onClose} />
+              <CompanyAnalysis name={(item as CompanyItem).name} cases={cases} />
             )}
             {overlay.mode === "index" && item && (
               <CompatibilityIndex item={item as CaseItem} />
@@ -2343,6 +2365,7 @@ function SectionTitle({
     </div>
   );
 }
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 function Analytics({
   item,
   onClose,

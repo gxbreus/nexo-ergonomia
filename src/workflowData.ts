@@ -4,7 +4,7 @@ export type WorkflowQuestion = {
   id: string;
   dimension: string;
   title: string;
-  type: "select" | "multi" | "date" | "number" | "duration" | "calculated";
+  type: "select" | "multi" | "date" | "number" | "duration" | "calculated" | "text";
   options?: string[];
   unitOptions?: string[];
   showWhen?: (answers: Record<string, AnswerValue>) => boolean;
@@ -119,6 +119,7 @@ export const conditionQuestions: WorkflowQuestion[] = [
     options: conditionCatalog,
     showWhen: (a) => a.COND02 === "Sim",
   },
+  { id: 'COND03_OTHER', dimension: 'Identificação', title: 'Descreva a outra condição (sem classificação automática)', type: 'text', showWhen: (a) => a.COND02 === 'Sim' && a.COND03 === 'Outra condição' },
   {
     id: "COND04",
     dimension: "Compatibilidade anatômica",
@@ -203,7 +204,7 @@ export const conditionQuestions: WorkflowQuestion[] = [
     title: "Retomar a atividade aumentava novamente os sintomas?",
     type: "select",
     options: ["Sim", "Parcialmente", "Não", "Não houve retomada"],
-    showWhen: (a) => a.COND12 !== "Não houve interrupção",
+    showWhen: (a) => a.LT08 === "Sim",
   },
 ];
 
@@ -257,9 +258,17 @@ export const activityQuestions: WorkflowQuestion[] = [
   {
     id: "AT07_DURATION",
     dimension: "Intensidade da exposição",
-    title: "Informe a duração e a frequência das pausas",
+    title: "Quanto tempo durava cada pausa?",
     type: "number",
-    unitOptions: ["minutos a cada hora", "minutos por jornada"],
+    unitOptions: ["Minutos", "Horas"],
+    showWhen: (a) => a.AT07 === "Sim",
+  },
+  {
+    id: "AT07_FREQUENCY",
+    dimension: "Intensidade da exposição",
+    title: "Com que frequência as pausas aconteciam?",
+    type: "number",
+    unitOptions: ["Pausas por hora", "Pausas por jornada"],
     showWhen: (a) => a.AT07 === "Sim",
   },
   {
@@ -392,7 +401,7 @@ export const activityQuestions: WorkflowQuestion[] = [
     title: "A carga era manipulada com uma ou duas mãos?",
     type: "select",
     options: ["Uma", "Duas", "Variava"],
-    showWhen: (a) => a.AT18 === "Sim",
+    showWhen: (a) => a.AT18 === "Sim" && Array.isArray(a.AT19) && a.AT19.some((value) => ["Levantar", "Baixar", "Carregar", "Segurar"].includes(value)),
   },
   {
     id: "AT23",
@@ -400,7 +409,7 @@ export const activityQuestions: WorkflowQuestion[] = [
     title: "A carga permanecia próxima ao corpo?",
     type: "select",
     options: ["Sempre", "Às vezes", "Nunca"],
-    showWhen: (a) => a.AT18 === "Sim",
+    showWhen: (a) => a.AT18 === "Sim" && Array.isArray(a.AT19) && a.AT19.some((value) => ["Levantar", "Baixar", "Carregar", "Segurar"].includes(value)),
   },
   {
     id: "AT24",
@@ -469,7 +478,7 @@ export const timelineQuestions: WorkflowQuestion[] = [
       "Houve aumento da exposição antes do início ou da piora dos sintomas?",
     type: "select",
     options: ["Sim", "Não", "Não sabe"],
-    showWhen: (a) => a.AT26 === "Aumentou",
+    showWhen: (a) => a.AT26 === "Aumentou" || a.AT26 === "Diminuiu",
   },
   {
     id: "LT04",
@@ -478,7 +487,7 @@ export const timelineQuestions: WorkflowQuestion[] = [
       "Quanto tempo depois desse aumento os sintomas começaram ou pioraram?",
     type: "number",
     unitOptions: ["Dias", "Semanas", "Meses"],
-    showWhen: (a) => a.LT03 === "Sim",
+    showWhen: (a) => (a.AT26 === "Aumentou" || a.AT26 === "Diminuiu") && a.LT03 === "Sim",
   },
   {
     id: "LT05",
@@ -517,7 +526,7 @@ export const timelineQuestions: WorkflowQuestion[] = [
     title: "Após a retomada, os sintomas mudaram?",
     type: "select",
     options: ["Melhoraram", "Não mudaram", "Pioraram", "Não sabe"],
-    showWhen: (a) => a.LT08 === "Sim",
+    showWhen: (a) => a.LT05 === "Sim" && a.LT08 === "Sim",
   },
   {
     id: "LT10",
@@ -525,7 +534,7 @@ export const timelineQuestions: WorkflowQuestion[] = [
     title: "Quanto tempo depois da retomada ocorreu essa mudança?",
     type: "select",
     options: ["Imediatamente", "Dias", "Semanas", "Meses"],
-    showWhen: (a) => a.LT08 === "Sim" && a.LT09 !== "Não mudaram",
+    showWhen: (a) => a.LT05 === "Sim" && a.LT08 === "Sim" && (a.LT09 === "Melhoraram" || a.LT09 === "Pioraram"),
   },
   {
     id: "LT11",

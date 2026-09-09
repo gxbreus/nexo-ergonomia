@@ -1,4 +1,6 @@
 import { useEffect, useState, type ReactNode } from "react";
+import { regionData } from './regionData';
+import { catalogProfiles } from './catalogProfiles';
 import {
   Activity,
   Building2,
@@ -28,11 +30,12 @@ export type CaseWorkflowRecord = {
   activity: string;
   status: "Concluído" | "Em cadastro" | "Desatualizado";
   score: number;
+  indexPending?: boolean;
   workflow?: CaseWorkflowState;
 };
 
-type SimpleEntity = { id: string; name: string };
-type ConditionEntity = SimpleEntity & { cid: string; status: string };
+type SimpleEntity = { id: string; name: string; sectors?: { id: string; name: string }[] };
+type ConditionEntity = SimpleEntity & { cid: string; status: string; questions?: { id: string; title: string; type: string; options: { label: string }[] }[] };
 type ActivityEntry = {
   id: string;
   name: string;
@@ -103,7 +106,7 @@ export function CaseWorkflow({
   const draftKey = item ? `nexo-case-v2-${item.id}` : "nexo-new-case-draft-v2";
   const [step, setStep] = useState<Step>("identification");
   const [state, setState] = useState<CaseWorkflowState>(() => {
-    if (!item && typeof window !== "undefined") {
+    if (!readOnly && typeof window !== "undefined") {
       const stored = window.sessionStorage.getItem(draftKey);
       if (stored) return JSON.parse(stored) as CaseWorkflowState;
     }
@@ -129,7 +132,7 @@ export function CaseWorkflow({
       : unlinkedActivities;
   const sectors =
     state.associatedCompany && state.company
-      ? (sectorsByCompany[state.company] ?? [])
+      ? (companies.find((company) => company.name === state.company)?.sectors?.map((sector) => sector.name) ?? sectorsByCompany[state.company] ?? [])
       : [];
   const activityHours = (activity: ActivityEntry) =>
     Number(activity.answers.AT06 || 0);
@@ -156,6 +159,10 @@ export function CaseWorkflow({
       nextErrors.push("Selecione a empresa associada.");
     if (state.associatedSector && !state.sector)
       nextErrors.push("Selecione o setor da empresa.");
+    if (state.conditions.some((entry) => entry.answers.COND02 === 'Sim' && !entry.answers.COND03))
+      nextErrors.push('Selecione o diagnóstico específico de cada condição marcada como diagnosticada.');
+    if (state.activities.some((entry) => entry.answers.AT02 !== 'Ainda realiza' && entry.answers.AT01 && entry.answers.AT02 && String(entry.answers.AT02) < String(entry.answers.AT01)))
+      nextErrors.push('A data de término da atividade não pode anteceder seu início.');
     if (
       !state.conditions.length ||
       !state.conditions.every(
@@ -188,7 +195,7 @@ export function CaseWorkflow({
     event.preventDefault();
     const submitter = (event.nativeEvent as SubmitEvent)
       .submitter as HTMLButtonElement | null;
-    const draft = submitter?.value === "draft";
+    const draft = submitter?.value === "draft" || submitter?.value === "true";
     if (!draft && !validate()) return;
     const conditionName = String(
       state.conditions[0]?.answers.COND03 ||
@@ -200,16 +207,8 @@ export function CaseWorkflow({
       .filter((entry) => activityHours(entry) === maxHours)
       .map((entry) => entry.name)
       .join(", ");
-    const completedAnswers = [
-      ...state.conditions.flatMap((entry) => Object.values(entry.answers)),
-      ...state.activities.flatMap((entry) => Object.values(entry.answers)),
-      ...Object.values(state.timelineAnswers).flatMap((answers) =>
-        Object.values(answers),
-      ),
-    ].filter((value) =>
-      Array.isArray(value) ? value.length : Boolean(value),
-    ).length;
-    const score = draft ? 0 : Math.min(96, Math.max(42, 42 + completedAnswers));
+    // US01 leaves the percentage formula as XYZ/XXX.
+    const score = 0;
     window.sessionStorage.removeItem(draftKey);
     onSave({
       id:
@@ -223,6 +222,7 @@ export function CaseWorkflow({
       activity: principals,
       status: draft ? "Em cadastro" : "Concluído",
       score,
+      indexPending: true,
       workflow: state,
     });
   };
@@ -392,8 +392,12 @@ export function CaseWorkflow({
                 }
               />
               <Questionnaire
-                questions={conditionQuestions}
+                questions={[
+                  ...conditionQuestions.filter((question) => question.id !== "COND10" || state.activities.some((activity) => activity.name)).map((question) => question.id === "COND10" ? { ...question, options: [...state.activities.filter((activity) => activity.name).map((activity) => activity.name), "Nenhuma", "Não sabe"] } : question.id === "COND03" ? { ...question, options: [...new Set([...(question.options ?? []).filter((name) => !conditions.some((condition) => condition.name === name && condition.status !== "Ativa")), ...conditions.filter((condition) => condition.status === "Ativa").map((condition) => condition.name)])] } : question),
+                  ...(conditions.find((condition) => condition.name === entry.answers.COND03)?.questions ?? []).map((question): WorkflowQuestion => ({ id: `CUSTOM_${question.id}`, dimension: "Perguntas adicionais", title: question.title, type: question.type === "Valor numérico" ? "number" : question.type === "Seleção múltipla" ? "multi" : "select", options: question.options.map((option) => option.label) })),
+                ]}
                 answers={entry.answers}
+                context={{ LT05: "Sim", LT08: Object.entries(state.timelineAnswers).some(([key, answers]) => key.startsWith(`${entry.id}::`) && answers.LT05 === "Sim" && answers.LT08 === "Sim") ? "Sim" : "Não" }}
                 disabled={readOnly}
                 onChange={(answers) => patchCondition(entry.id, answers)}
               />
@@ -603,11 +607,41 @@ function Questionnaire({
   onChange: (answers: Record<string, AnswerValue>) => void;
 }) {
   const allAnswers = { ...context, ...answers };
-  const set = (id: string, value: AnswerValue) =>
-    onChange({ ...answers, [id]: value });
+  const expandedQuestions = questions.flatMap((question): WorkflowQuestion[] => {
+    const condition = ['COND05', 'COND06', 'COND07'].includes(question.id);
+    const activity = ['AT10', 'AT11', 'AT13', 'AT16'].includes(question.id);
+    if (!condition && !activity) return [question];
+    if (question.showWhen && !question.showWhen(allAnswers)) return [];
+    const selected = allAnswers[condition ? 'COND04' : 'AT09'];
+    const regions = regionData.filter((region) => Array.isArray(selected) && selected.includes(region.name));
+    return regions.flatMap((region) => {
+      const side = question.id === 'COND05' || question.id === 'AT10';
+      const options = side ? region.central ? ['Central'] : ['Direito', 'Esquerdo', 'Ambos'] : question.id === 'COND06' ? question.options : region.movements;
+      const main = { ...question, id: `${question.id}_${region.code}`, title: `${region.name} — ${side && region.central ? 'Localização central' : question.title}`, options, showWhen: undefined };
+      return side ? [main, { id: `${question.id}_${region.code}_SUBREGIONS`, dimension: question.dimension, title: `${region.name} — ${region.name.startsWith('Dedos') ? 'Quais dedos?' : 'Detalhar sub-região (opcional)'}`, type: 'multi', options: region.subregions }] : [main];
+    });
+  });
+  const set = (id: string, value: AnswerValue) => {
+    const next = { ...answers, [id]: value };
+    if (id === 'COND02' && value !== 'Sim') { delete next.COND03; delete next.COND03_OTHER; delete next.PROFILE_CONFIRM; }
+    if (id === 'COND03') {
+      const profile = catalogProfiles.find((entry) => entry.name === value);
+      if (profile) {
+        next.COND04 = regionData.filter((region) => profile.regions.includes(region.code)).map((region) => region.name);
+        for (const code of profile.regions) {
+          next[`COND06_${code}`] = profile.structures.map((structure) => structure[0].toUpperCase() + structure.slice(1));
+          next[`COND07_${code}`] = profile.movements;
+          if (regionData.find((region) => region.code === code)?.central) next[`COND05_${code}`] = 'Central';
+        }
+        next.PROFILE_CONFIRM = 'Não';
+      } else delete next.PROFILE_CONFIRM;
+    }
+    onChange(next);
+  };
   return (
     <div className="questionnaire">
-      {questions
+      {answers.PROFILE_CONFIRM && <div className="inline-warning"><p>Regiões, estruturas e movimentos foram pré-preenchidos pelo catálogo. Confira e ajuste os dados para esta pessoa; o perfil é provisório.</p><button type="button" disabled={disabled || answers.PROFILE_CONFIRM === 'Sim'} onClick={() => set('PROFILE_CONFIRM', 'Sim')}>{answers.PROFILE_CONFIRM === 'Sim' ? 'Dados do perfil confirmados' : 'Confirmar dados do perfil'}</button></div>}
+      {expandedQuestions
         .filter(
           (question) => !question.showWhen || question.showWhen(allAnswers),
         )
@@ -662,6 +696,9 @@ function QuestionInput({
       </div>
     );
   if (question.type === "select")
+    if (question.options?.length === 1 && question.options[0] === 'Central') return <p>Central — não se aplica lateralidade.</p>;
+  if (question.type === 'text') return <input type="text" maxLength={255} disabled={disabled} value={typeof value === 'string' ? value : ''} onChange={(event) => onChange(event.target.value)} />;
+  if (question.type === "select")
     return (
       <div className="answer-options">
         {question.options?.map((option) => (
@@ -681,7 +718,7 @@ function QuestionInput({
     const selected = Array.isArray(value) ? value : [];
     return (
       <div className="answer-options multi">
-        {question.options?.map((option) => (
+        {[...new Set([...(question.options ?? []), ...selected])].map((option) => (
           <button
             type="button"
             disabled={disabled}
@@ -707,8 +744,8 @@ function QuestionInput({
       <div className="compound-answer">
         <input
           type="date"
-          disabled={disabled}
-          value={typeof value === "string" ? value : ""}
+          disabled={disabled || value === "Ainda realiza"}
+          value={typeof value === "string" && value !== "Ainda realiza" ? value : ""}
           onChange={(event) => onChange(event.target.value)}
         />
         <label>
@@ -729,9 +766,10 @@ function QuestionInput({
           <button
             type="button"
             disabled={disabled}
-            onClick={() => onChange("Ainda realiza")}
+            aria-pressed={value === "Ainda realiza"}
+            onClick={() => onChange(value === "Ainda realiza" ? "" : "Ainda realiza")}
           >
-            Ainda realiza
+            {value === "Ainda realiza" ? "✓ Ainda realiza — informar término" : "Ainda realiza"}
           </button>
         )}
       </div>
@@ -753,6 +791,9 @@ function QuestionInput({
           <output>{formatHours(hours)}</output>
         </div>
         <p>1 a 8 horas, em intervalos de 15 minutos</p>
+        <label>Informar duração em horas
+          <input aria-label="Duração em horas" type="number" min="1" max="8" step="0.25" value={hours} disabled={disabled} onChange={(event) => onChange(event.target.value)} />
+        </label>
         <div className="duration-ticks">
           {[1, 2, 3, 4, 5, 6, 7, 8].map((hour) => (
             <span key={hour}>{hour}h</span>
@@ -765,7 +806,9 @@ function QuestionInput({
     <div className="number-answer">
       <input
         type="number"
-        min="0"
+        min={question.id === 'AT03' ? '1' : '0'}
+        max={question.id === 'AT03' ? '7' : undefined}
+        step={['AT03', 'AT04', 'AT17', 'AT21', 'AT07_FREQUENCY'].includes(question.id) ? '1' : 'any'}
         disabled={disabled}
         value={typeof value === "string" ? value : ""}
         onChange={(event) => onChange(event.target.value)}
@@ -786,18 +829,21 @@ function QuestionInput({
 }
 
 function calculated(id: string, answers: Record<string, AnswerValue>) {
-  if (id === "LT01")
-    return answers.AT01 && answers.COND08
-      ? "Comparação disponível após salvar as datas"
-      : "Aguardando datas de atividade e sintomas";
-  if (id === "LT02")
-    return answers.AT01 && answers.COND08
-      ? "Intervalo calculado automaticamente"
-      : "Aguardando datas";
-  if (id === "LT11")
-    return answers.AT02 && answers.COND08
-      ? "Resultado calculado pelas datas informadas"
-      : "Aguardando data de término";
+  const date = (value: AnswerValue | undefined) => typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value) ? Date.parse(`${value}T00:00:00Z`) : NaN;
+  const start = date(answers.AT01);
+  const symptoms = date(answers.COND08);
+  if (id === "LT01" || id === "LT02") {
+    if (!Number.isFinite(start) || !Number.isFinite(symptoms)) return "Aguardando datas de atividade e sintomas";
+    const days = Math.round((symptoms - start) / 86400000);
+    if (id === "LT01") return days === 0 ? "Mesma data" : days > 0 ? "Depois" : "Antes";
+    const approximate = answers.AT01_APPROXIMATE === "Sim" || answers.COND08_APPROXIMATE === "Sim";
+    return `${approximate ? "Aproximadamente " : ""}${Math.abs(days)} dias${days < 0 ? " antes da exposição" : " após o início da exposição"}`;
+  }
+  if (id === "LT11") {
+    if (answers.AT02 === "Ainda realiza") return "Não se aplica: atividade ainda realizada";
+    const end = date(answers.AT02);
+    return Number.isFinite(end) && Number.isFinite(symptoms) ? (symptoms > end ? "Sim" : "Não") : "Aguardando datas de término e sintomas";
+  }
   return "Aguardando respostas";
 }
 function formatHours(value: number) {
