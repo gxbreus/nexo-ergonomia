@@ -1,15 +1,17 @@
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   Activity,
   AlertTriangle,
   Building2,
   ChevronLeft,
   ClipboardList,
+  CheckCircle2,
   Edit3,
   Eye,
   FilePlus2,
   Plus,
   Search,
+  Power,
   Trash2,
   X,
 } from "lucide-react";
@@ -35,9 +37,11 @@ import {
 } from "./ConditionWorkflow";
 import { bodyRegions } from "./workflowData";
 import { CompanyAnalysis } from "./CompanyAnalysis";
+import { SearchableSelect } from './SearchableSelect';
+import { companyActivities, unlinkedActivities } from './activityData';
 
 type View = "cases" | "companies" | "conditions";
-type Mode = "create" | "edit" | "view" | "analytics" | "index" | "history";
+type Mode = "create" | "edit" | "view" | "analytics" | "index" | "history" | "success";
 type CaseItem = CaseWorkflowRecord;
 type CompanyItem = CompanyWorkflowRecord;
 type ConditionItem = ConditionWorkflowRecord;
@@ -144,6 +148,17 @@ export default function App() {
   const [multiFilterB, setMultiFilterB] = useState<string[]>([]);
   const [selectFilterA, setSelectFilterA] = useState("Todos");
   const [selectFilterB, setSelectFilterB] = useState("Todos");
+  const [activityFilters, setActivityFilters] = useState<string[]>([]);
+  useEffect(() => {
+    if (localStorage.getItem('nexo-placeholder-sectors-v2')) return;
+    setCompanyItems((items) => items.map((company) => {
+      const seed = companies.find((entry) => entry.id === company.id);
+      if (!seed) return company;
+      const existing = company.sectors ?? [];
+      return { ...company, sectors: [...existing, ...seed.sectors.filter((sector) => !existing.some((entry) => entry.name === sector.name))] };
+    }));
+    localStorage.setItem('nexo-placeholder-sectors-v2', 'true');
+  }, [setCompanyItems]);
   const [searched, setSearched] = useState<Record<View, boolean>>({
     cases: false,
     companies: false,
@@ -172,9 +187,11 @@ export default function App() {
     Number(extraFilter !== "Todos") +
     multiFilterA.length +
     multiFilterB.length +
+    activityFilters.length +
     Number(selectFilterA !== "Todos") +
     Number(selectFilterB !== "Todos");
   const open = (entity: View, mode: Mode, id?: string) => {
+    if (entity === 'cases' && mode === 'edit' && caseItems.find((item) => item.id === id)?.status === 'Desativado') return;
     if (entity === "cases" && mode === "edit" && id)
       setCaseItems((items) =>
         items.map((item) =>
@@ -184,9 +201,12 @@ export default function App() {
     setOverlay({ entity, mode, id });
   };
   const remove = (entity: View, id: string) => {
+    if (entity === 'cases') {
+      if (!window.confirm('Desativar este caso? O registro e suas respostas serão mantidos.')) return;
+      setCaseItems((items) => items.map((item) => item.id === id ? { ...item, status: 'Desativado' } : item));
+      setOverlay(null); showToast('Caso desativado.'); return;
+    }
     if (!window.confirm("Excluir este registro do protótipo?")) return;
-    if (entity === "cases")
-      setCaseItems((items) => items.filter((item) => item.id !== id));
     if (entity === "companies") {
       const company = companyItems.find((item) => item.id === id);
       setCompanyItems((items) => items.filter((item) => item.id !== id));
@@ -231,6 +251,7 @@ export default function App() {
                 setExtraFilter("Todos");
                 setMultiFilterA([]);
                 setMultiFilterB([]);
+                setActivityFilters([]);
                 setSelectFilterA("Todos");
                 setSelectFilterB("Todos");
               }}
@@ -314,7 +335,9 @@ export default function App() {
                   <input
                     value={query}
                     onChange={(event) => setQuery(event.target.value)}
-                    placeholder="Buscar por nome, CID ou atividade"
+                    maxLength={255}
+                    aria-label={view === 'cases' ? 'Nome do trabalhador' : 'Nome'}
+                    placeholder={view === 'cases' ? 'Buscar por nome do trabalhador' : view === 'companies' ? 'Buscar por nome da empresa' : 'Buscar por nome da doença'}
                   />
                 </label>
                 <button
@@ -343,12 +366,14 @@ export default function App() {
                 conditions={conditionItems}
                 multiA={multiFilterA}
                 multiB={multiFilterB}
+                activities={activityFilters}
                 selectA={selectFilterA}
                 selectB={selectFilterB}
                 onStatus={setStatusFilter}
-                onExtra={setExtraFilter}
+                onExtra={(value) => { setExtraFilter(value); setMultiFilterB([]); setActivityFilters([]); }}
                 onMultiA={setMultiFilterA}
                 onMultiB={setMultiFilterB}
+                onActivities={setActivityFilters}
                 onSelectA={setSelectFilterA}
                 onSelectB={setSelectFilterB}
                 clear={() => {
@@ -356,6 +381,7 @@ export default function App() {
                   setExtraFilter("Todos");
                   setMultiFilterA([]);
                   setMultiFilterB([]);
+                  setActivityFilters([]);
                   setSelectFilterA("Todos");
                   setSelectFilterB("Todos");
                 }}
@@ -370,7 +396,7 @@ export default function App() {
                 company={extraFilter}
                 diseases={multiFilterA}
                 sectors={multiFilterB}
-                activity={selectFilterA}
+                activities={activityFilters}
                 onStatus={setStatusFilter}
                 onOpen={open}
                 onRemove={remove}
@@ -424,7 +450,7 @@ export default function App() {
                 : [item, ...items],
             );
             if (item.status === "Concluído") {
-              setOverlay({ entity: "cases", mode: "index", id: item.id });
+              setOverlay({ entity: "cases", mode: "success", id: item.id });
               showToast("Caso concluído e respostas salvas.");
             } else {
               setOverlay(null);
@@ -501,7 +527,7 @@ export default function App() {
             if (condition)
               setCaseItems((items) =>
                 items.map((item) =>
-                  (item.injury === condition.name || item.workflow?.conditions.some((entry) => entry.answers.COND03 === condition.name))
+                  item.status !== 'Desativado' && (item.injury === condition.name || item.workflow?.disease === condition.name || item.workflow?.conditions.some((entry) => entry.answers.COND03 === condition.name))
                     ? { ...item, status: "Desatualizado" as CaseStatus }
                     : item,
                 ),
@@ -532,12 +558,14 @@ function FilterPanel({
   conditions,
   multiA,
   multiB,
+  activities,
   selectA,
   selectB,
   onStatus,
   onExtra,
   onMultiA,
   onMultiB,
+  onActivities,
   onSelectA,
   onSelectB,
   clear,
@@ -550,12 +578,14 @@ function FilterPanel({
   conditions: ConditionItem[];
   multiA: string[];
   multiB: string[];
+  activities: string[];
   selectA: string;
   selectB: string;
   onStatus: (value: string) => void;
   onExtra: (value: string) => void;
   onMultiA: (value: string[]) => void;
   onMultiB: (value: string[]) => void;
+  onActivities: (value: string[]) => void;
   onSelectA: (value: string) => void;
   onSelectB: (value: string) => void;
   clear: () => void;
@@ -564,18 +594,9 @@ function FilterPanel({
     view === "conditions"
       ? ["Todos", "Ativa", "Em cadastro", "Desativada"]
       : view === "cases"
-        ? ["Todos", "Concluído", "Em cadastro", "Desatualizado"]
+        ? ["Todos", "Concluído", "Em cadastro", "Desatualizado", "Desativado"]
         : ["Todos"];
-  const companyOptions = [
-    "Todos",
-    ...companies.map((item) => item.name),
-    "Sem empresa",
-  ];
   const unique = (values: string[]) => [...new Set(values.filter(Boolean))];
-  const toggle = (items: string[], item: string) =>
-    items.includes(item)
-      ? items.filter((entry) => entry !== item)
-      : [...items, item];
   return (
     <div className="filter-panel">
       <div className="filter-panel-head">
@@ -599,68 +620,27 @@ function FilterPanel({
         </label>
         {view === "cases" && (
           <>
-            <label className="filter-field">
+            <div className="filter-field">
               <span>Empresa</span>
-              <select
-                value={extra}
-                onChange={(event) => onExtra(event.target.value)}
-              >
-                {companyOptions.map((item) => (
-                  <option key={item}>{item}</option>
-                ))}
-              </select>
-            </label>
-            <MultiFilter
-              label="Doença (múltipla; nome ou CID)"
-              options={unique(
-                conditions
-                  .filter((item) => item.status === "Ativa")
-                  .map((item) => item.name),
-              )}
-              selected={multiA}
-              onToggle={(item) => onMultiA(toggle(multiA, item))}
-            />
-            <MultiFilter
-              label="Setor (múltipla; depende da empresa)"
-              options={unique(
-                cases
-                  .filter((item) => extra === "Todos" || item.company === extra)
-                  .map((item) => item.sector ?? ""),
-              )}
-              selected={multiB}
-              onToggle={(item) => onMultiB(toggle(multiB, item))}
-            />
-            <label className="filter-field">
+              <SearchableSelect label="Empresa" options={[...companies.map((item) => ({ value: item.name, label: item.name })), { value: 'Sem empresa', label: 'Sem empresa' }]} value={extra === 'Todos' ? '' : extra} onChange={(values) => onExtra(values[0] ?? 'Todos')} placeholder="Pesquisar empresa" />
+            </div>
+            <div className="filter-field">
+              <span>Doença</span>
+              <SearchableSelect label="Doença" multiple options={conditions.filter((item) => item.status === 'Ativa').map((item) => ({ value: item.name, label: item.name, description: item.cid }))} value={multiA} onChange={onMultiA} placeholder="Pesquisar por nome ou CID" />
+            </div>
+            {extra !== 'Todos' && extra !== 'Sem empresa' && <div className="filter-field">
+              <span>Setor</span>
+              <SearchableSelect label="Setor" multiple options={unique([...(companies.find((item) => item.name === extra)?.sectors?.map((sector) => sector.name) ?? []), ...cases.filter((item) => item.company === extra).map((item) => item.sector ?? '')]).map((name) => ({ value: name, label: name }))} value={multiB} onChange={onMultiB} placeholder="Pesquisar setores da empresa" />
+            </div>}
+            <div className="filter-field">
               <span>Atividade principal</span>
-              <select
-                value={selectA}
-                onChange={(event) => onSelectA(event.target.value)}
-              >
-                <option>Todos</option>
-                {unique(
-                  cases
-                    .filter(
-                      (item) =>
-                        extra === "Todos" ||
-                        item.company === extra ||
-                        (extra === "Sem empresa" && !item.company),
-                    )
-                    .flatMap((item) => item.activity.split(", ")),
-                ).map((item) => (
-                  <option key={item}>{item}</option>
-                ))}
-              </select>
-            </label>
+              <SearchableSelect label="Atividade principal" multiple options={unique([...(extra === 'Todos' || extra === 'Sem empresa' ? unlinkedActivities : companyActivities[extra] ?? []), ...cases.filter((item) => extra === 'Todos' || extra === 'Sem empresa' ? !item.company : item.company === extra).flatMap((item) => item.activity.split(', '))]).map((name) => ({ value: name, label: name }))} value={activities} onChange={onActivities} placeholder="Pesquisar atividades" />
+            </div>
           </>
         )}
         {view === "conditions" && (
           <>
-            <MultiFilter
-              label="Região corporal (múltipla)"
-              options={bodyRegions}
-              selected={multiA}
-              onToggle={(item) => onMultiA(toggle(multiA, item))}
-            />
+            <div className="filter-field"><span>Região corporal</span><SearchableSelect label="Região corporal" multiple options={bodyRegions.map((name) => ({ value: name, label: name }))} value={multiA} onChange={onMultiA} placeholder="Pesquisar regiões" /></div>
             <label className="filter-field">
               <span>Tipo da condição</span>
               <select
@@ -693,6 +673,7 @@ function FilterPanel({
   );
 }
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 function MultiFilter({
   label,
   options,
@@ -847,7 +828,7 @@ function CaseList({
   company,
   diseases,
   sectors,
-  activity,
+  activities,
   onStatus,
   onOpen,
   onRemove,
@@ -858,7 +839,7 @@ function CaseList({
   company: string;
   diseases: string[];
   sectors: string[];
-  activity: string;
+  activities: string[];
   onStatus: (value: string) => void;
   onOpen: (entity: View, mode: Mode, id?: string) => void;
   onRemove: (entity: View, id: string) => void;
@@ -867,7 +848,7 @@ function CaseList({
     () =>
       items.filter(
         (item) =>
-          `${item.name} ${item.injury} ${item.cid} ${item.company} ${item.activity}`
+          item.name
             .toLowerCase()
             .includes(query.toLowerCase()) &&
           (status === "Todos" || item.status === status) &&
@@ -877,16 +858,15 @@ function CaseList({
               : item.company === company)) &&
           (!diseases.length || diseases.includes(item.injury)) &&
           (!sectors.length || sectors.includes(item.sector ?? "")) &&
-          (activity === "Todos" ||
-            item.activity.split(", ").includes(activity)),
+          (!activities.length || item.activity.split(', ').some((name) => activities.includes(name))),
       ),
-    [items, query, status, company, diseases, sectors, activity],
+    [items, query, status, company, diseases, sectors, activities],
   );
   return (
     <>
       <div className="quick-filters">
         <span>Status rápido:</span>
-        {["Todos", "Concluído", "Em cadastro", "Desatualizado"].map((item) => (
+        {["Todos", "Concluído", "Em cadastro", "Desatualizado", "Desativado"].map((item) => (
           <button
             key={item}
             onClick={() => onStatus(item)}
@@ -901,12 +881,11 @@ function CaseList({
           <thead>
             <tr>
               <th>Trabalhador</th>
-              <th>Condição</th>
+              <th>Doença</th>
               <th>Empresa</th>
               <th>Setor</th>
               <th>Atividade principal</th>
               <th>Status</th>
-              <th>Índice</th>
               <th />
             </tr>
           </thead>
@@ -926,7 +905,7 @@ function CaseList({
                   <strong className="table-main">{item.injury}</strong>
                   <small>{item.cid}</small>
                 </td>
-                <td>{item.company || "Sem empresa"}</td>
+                <td>{item.company}</td>
                 <td>{item.sector || "—"}</td>
                 <td>{item.activity}</td>
                 <td>
@@ -935,21 +914,12 @@ function CaseList({
                   </span>
                 </td>
                 <td>
-                  <div className="score">
-                    <strong>
-                      {item.score || "—"}
-                      {item.score ? "%" : ""}
-                    </strong>
-                    <span>
-                      <i style={{ width: `${item.score}%` }} />
-                    </span>
-                  </div>
-                </td>
-                <td>
                   <RowActions
                     onView={() => onOpen("cases", "view", item.id)}
                     onEdit={() => onOpen("cases", "edit", item.id)}
                     onDelete={() => onRemove("cases", item.id)}
+                    deactivate
+                    inactive={item.status === 'Desativado'}
                   />
                 </td>
               </tr>
@@ -1129,21 +1099,25 @@ function RowActions({
   onView,
   onEdit,
   onDelete,
+  deactivate = false,
+  inactive = false,
 }: {
   onView: () => void;
   onEdit: () => void;
   onDelete: () => void;
+  deactivate?: boolean;
+  inactive?: boolean;
 }) {
   return (
     <div className="row-actions">
       <button title="Visualizar" onClick={onView}>
         <Eye size={14} />
       </button>
-      <button title="Editar" onClick={onEdit}>
+      <button title="Editar" aria-label="Editar" disabled={inactive} onClick={onEdit}>
         <Edit3 size={13} />
       </button>
-      <button title="Excluir" onClick={onDelete}>
-        <Trash2 size={13} />
+      <button title={deactivate ? 'Desativar caso' : 'Excluir'} aria-label={deactivate ? 'Desativar caso' : 'Excluir'} disabled={inactive} onClick={onDelete}>
+        {deactivate ? <Power size={13} /> : <Trash2 size={13} />}
       </button>
     </div>
   );
@@ -1184,7 +1158,7 @@ function Footer({ count }: { count: number }) {
 }
 
 function CompatibilityIndex({ item }: { item: CaseItem }) {
-  if (item.indexPending && item.status === "Concluído") return <section className="form-section"><h2>Caso concluído</h2><p>As respostas foram salvas. O percentual de compatibilidade aguarda a definição das regras XYZ/XXX mencionadas na US01.</p><h3>Dimensões consideradas</h3>{dimensions.map((dimension) => <p key={dimension.name}>{dimension.name}: aguardando fórmula</p>)}</section>;
+  if (item.indexPending && item.status === "Concluído") return <section className="form-section index-pending"><div><small>ÍNDICE DE COMPATIBILIDADE</small><strong>—</strong><h2>Avaliação registrada</h2><p>As respostas deste caso estão salvas. O índice de compatibilidade ainda não está disponível.</p></div><section><h3>Dimensões consideradas</h3>{dimensions.map((dimension) => <div className="pending-dimension" key={dimension.name}><span>{dimension.name}</span><strong>—</strong></div>)}</section></section>;
   if (item.status !== "Concluído")
     return (
       <div className="index-unavailable">
@@ -1234,6 +1208,18 @@ function CompatibilityIndex({ item }: { item: CaseItem }) {
     </div>
   );
 }
+function CaseCompleted({ item, onBack, onView, onIndex }: { item: CaseItem; onBack: () => void; onView: () => void; onIndex: () => void }) {
+  return <section className="case-completed">
+    <div className="completed-symbol"><CheckCircle2 size={38} aria-hidden="true" /></div>
+    <span className="completed-eyebrow">CADASTRO FINALIZADO</span>
+    <h1>Caso concluído</h1><p>As informações e respostas foram salvas com sucesso.</p>
+    <div className="completed-summary">
+      <div className="completed-case-heading"><div><small>CÓDIGO DO CASO</small><strong>{item.id}</strong></div><span className={statusClass(item.status)}>{item.status}</span></div>
+      <dl><div><dt>Trabalhador</dt><dd>{item.name}</dd></div><div><dt>Doença alegada</dt><dd>{item.cid ? `${item.cid} · ` : ''}{item.injury}</dd></div><div><dt>Empresa</dt><dd>{item.company || 'Sem vínculo com empresa'}</dd></div>{item.sector && <div><dt>Setor</dt><dd>{item.sector}</dd></div>}<div><dt>Atividade principal</dt><dd>{item.activity}</dd></div></dl>
+    </div>
+    <div className="completed-actions"><button className="secondary-button" onClick={onBack}>Voltar para casos</button><button className="secondary-button" onClick={onView}><Eye size={15} /> Visualizar caso</button><button className="primary-button" onClick={onIndex}>Ver índice de compatibilidade</button></div>
+  </section>;
+}
 
 function ChangeHistory({ entity, itemId }: { entity: string; itemId: string }) {
   const history = JSON.parse(localStorage.getItem(`nexo-history-${itemId}`) ?? "[]") as { date: string; action: string; responsible: string; fields: string }[];
@@ -1279,6 +1265,13 @@ function FullScreenForm({
   onSaveCondition: (item: ConditionItem) => void;
   onDeactivate: (id: string) => void;
 }) {
+  const scrollBody = useRef<HTMLDivElement>(null);
+  useEffect(() => { scrollBody.current?.scrollTo(0, 0); }, [overlay.id, overlay.mode]);
+  useEffect(() => {
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => { document.body.style.overflow = previous; };
+  }, []);
   const item =
     overlay.entity === "cases"
       ? cases.find((entry) => entry.id === overlay.id)
@@ -1290,7 +1283,7 @@ function FullScreenForm({
       ? "CASO"
       : overlay.entity === "companies"
         ? "EMPRESA"
-        : "CONDIÇÃO";
+        : "DOENÇA";
   const title =
     overlay.mode === "create"
       ? `Cadastrar ${label.toLowerCase()}`
@@ -1298,11 +1291,13 @@ function FullScreenForm({
         ? "Análise da empresa"
         : overlay.mode === "index"
           ? "Índice de compatibilidade"
+          : overlay.mode === 'success'
+            ? 'Caso concluído'
           : overlay.mode === "history"
             ? "Histórico de alterações"
             : overlay.mode === "edit"
               ? `Editar ${label.toLowerCase()}`
-              : `Detalhes do ${label.toLowerCase()}`;
+              : `Detalhes ${overlay.entity === 'cases' ? 'do' : 'da'} ${label.toLowerCase()}`;
   return (
     <div className="overlay">
       <div className="drawer wide fullscreen-drawer">
@@ -1316,7 +1311,7 @@ function FullScreenForm({
                 {label} ·{" "}
                 {overlay.mode === "create"
                   ? "NOVO REGISTRO"
-                  : overlay.mode.toUpperCase()}
+                  : ({ edit: 'EDIÇÃO', view: 'VISUALIZAÇÃO', success: 'CONCLUÍDO', index: 'ÍNDICE', history: 'HISTÓRICO', analytics: 'ANÁLISE' } as Record<string, string>)[overlay.mode]}
               </span>
               <h2>{title}</h2>
             </div>
@@ -1325,7 +1320,7 @@ function FullScreenForm({
             <X size={17} />
           </button>
         </header>
-        <div className="drawer-body">
+        <div className="drawer-body" ref={scrollBody}>
           <div className="full-form-shell">
             {overlay.mode === "analytics" && item && (
               <CompanyAnalysis name={(item as CompanyItem).name} cases={cases} />
@@ -1333,22 +1328,26 @@ function FullScreenForm({
             {overlay.mode === "index" && item && (
               <CompatibilityIndex item={item as CaseItem} />
             )}
+            {overlay.mode === 'success' && item && <CaseCompleted item={item as CaseItem} onBack={onClose} onView={() => onNavigate({ entity: 'cases', mode: 'view', id: item.id })} onIndex={() => onNavigate({ entity: 'cases', mode: 'index', id: item.id })} />}
             {overlay.mode === "history" && item && (
               <ChangeHistory entity={label.toLowerCase()} itemId={item.id} />
             )}
             {overlay.entity === "cases" &&
               ["create", "edit", "view"].includes(overlay.mode) && (
                 <CaseForm
+                  key={`${overlay.id ?? 'new'}-${overlay.mode}`}
                   item={item as CaseItem | undefined}
                   mode={overlay.mode as "create" | "edit" | "view"}
                   companies={companies}
                   conditions={conditions}
+                  existingCodes={cases.map((entry) => entry.id)}
                   onSave={onSaveCase}
                 />
               )}
             {overlay.entity === "companies" &&
               ["create", "edit", "view"].includes(overlay.mode) && (
                 <CompanyForm
+                  key={`${overlay.id ?? 'new'}-${overlay.mode}`}
                   item={item as CompanyItem | undefined}
                   mode={overlay.mode as "create" | "edit" | "view"}
                   cases={cases}
@@ -1358,6 +1357,7 @@ function FullScreenForm({
             {overlay.entity === "conditions" &&
               ["create", "edit", "view"].includes(overlay.mode) && (
                 <ConditionForm
+                  key={`${overlay.id ?? 'new'}-${overlay.mode}`}
                   item={item as ConditionItem | undefined}
                   mode={overlay.mode as "create" | "edit" | "view"}
                   onSave={onSaveCondition}
@@ -1365,7 +1365,7 @@ function FullScreenForm({
               )}
           </div>
         </div>
-        {!["analytics", "index", "history"].includes(overlay.mode) && (
+        {!["analytics", "index", "history", "success"].includes(overlay.mode) && (
           <footer className="drawer-footer">
             {overlay.mode !== "create" &&
               overlay.mode !== "view" &&
@@ -1375,16 +1375,17 @@ function FullScreenForm({
                   className="ghost-button danger-button"
                   onClick={() => onDeactivate(item.id)}
                 >
-                  Desativar condição
+                  Desativar doença
                 </button>
               )}
             {overlay.mode === "view" && item && (
               <>
                 <button
+                  disabled={overlay.entity === 'cases' && (item as CaseItem).status === 'Desativado'}
                   className="ghost-button"
                   onClick={() => onRemove(overlay.entity, item.id)}
                 >
-                  Excluir
+                  {overlay.entity === 'cases' ? 'Desativar caso' : 'Excluir'}
                 </button>
                 <button className="secondary-button" onClick={() => onClose()}>
                   Fechar
@@ -1426,7 +1427,7 @@ function FullScreenForm({
                   </button>
                 )}
                 {overlay.entity === "cases" &&
-                  (item as CaseItem).status !== "Desatualizado" && (
+                  ['Em cadastro', 'Concluído'].includes((item as CaseItem).status) && (
                     <button
                       className="secondary-button"
                       onClick={() =>
@@ -1441,6 +1442,7 @@ function FullScreenForm({
                     </button>
                   )}
                 <button
+                  disabled={overlay.entity === 'cases' && (item as CaseItem).status === 'Desativado'}
                   className="primary-button"
                   onClick={() =>
                     onNavigate({

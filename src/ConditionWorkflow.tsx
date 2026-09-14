@@ -1,6 +1,7 @@
-import { useState, type ReactNode } from "react";
+import { isValidElement, useState, type ReactNode } from "react";
 import { Activity, FilePlus2, Plus, Trash2 } from "lucide-react";
 import { bodyRegions } from "./workflowData";
+import { SearchableSelect } from './SearchableSelect';
 
 type CustomQuestion = {
   id: string;
@@ -73,18 +74,6 @@ export function ConditionWorkflow({
   );
   const [errors, setErrors] = useState<string[]>([]);
 
-  const toggleRegion = (region: string) =>
-    setRegions((items) =>
-      items.some((entry) => entry.name === region)
-        ? items.filter((entry) => entry.name !== region)
-        : [
-            ...items,
-            {
-              name: region,
-              side: spinalRegions.has(region) ? "Central" : "Ambos",
-            },
-          ],
-    );
   const resizeOptions = (id: string, count: number) =>
     setQuestions((items) =>
       items.map((question) =>
@@ -246,24 +235,7 @@ export function ConditionWorkflow({
             <p className="condition-label">
               EXIBIDA PORQUE A CONDIÇÃO AFETA REGIÃO CORPORAL
             </p>
-            <div className="region-pills">
-              {bodyRegions.map((region) => (
-                <button
-                  type="button"
-                  disabled={readOnly}
-                  className={
-                    regions.some((entry) => entry.name === region)
-                      ? "selected"
-                      : ""
-                  }
-                  key={region}
-                  onClick={() => toggleRegion(region)}
-                >
-                  {regions.some((entry) => entry.name === region) ? "✓ " : "+ "}
-                  {region}
-                </button>
-              ))}
-            </div>
+            <Field label="Região corporal afetada" required><SearchableSelect label="Região corporal afetada" multiple disabled={readOnly} options={bodyRegions.map((name) => ({ value: name, label: name }))} value={regions.map((region) => region.name)} onChange={(values) => setRegions(values.map((name) => regions.find((entry) => entry.name === name) ?? { name, side: spinalRegions.has(name) ? 'Central' : 'Ambos' }))} placeholder="Pesquisar e selecionar regiões" /></Field>
             {regions.map((region) => (
               <div className="region-detail" key={region.name}>
                 <strong>{region.name}</strong>
@@ -528,14 +500,15 @@ function Field({
   required?: boolean;
   children: ReactNode;
 }) {
+  const Container = isValidElement(children) && children.type === SearchableSelect ? 'div' : 'label';
   return (
-    <label className="field">
+    <Container className="field">
       <span>
         {label}
         {required && <b>*</b>}
       </span>
       {children}
-    </label>
+    </Container>
   );
 }
 function Toggle({

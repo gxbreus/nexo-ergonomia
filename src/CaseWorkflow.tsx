@@ -1,6 +1,8 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { isValidElement, useEffect, useState, type ReactNode } from "react";
 import { regionData } from './regionData';
 import { catalogProfiles } from './catalogProfiles';
+import { SearchableSelect } from './SearchableSelect';
+import { companyActivities, unlinkedActivities } from './activityData';
 import {
   Activity,
   Building2,
@@ -28,7 +30,7 @@ export type CaseWorkflowRecord = {
   company: string;
   sector?: string;
   activity: string;
-  status: "Concluído" | "Em cadastro" | "Desatualizado";
+  status: "Concluído" | "Em cadastro" | "Desatualizado" | "Desativado";
   score: number;
   indexPending?: boolean;
   workflow?: CaseWorkflowState;
@@ -39,6 +41,7 @@ type ConditionEntity = SimpleEntity & { cid: string; status: string; questions?:
 type ActivityEntry = {
   id: string;
   name: string;
+  other?: boolean;
   answers: Record<string, AnswerValue>;
 };
 type ConditionEntry = { id: string; answers: Record<string, AnswerValue> };
@@ -46,6 +49,7 @@ type Step = "identification" | "condition" | "activity" | "timeline";
 
 export type CaseWorkflowState = {
   name: string;
+  disease?: string;
   associatedCompany: boolean;
   company: string;
   associatedSector: boolean;
@@ -55,23 +59,11 @@ export type CaseWorkflowState = {
   timelineAnswers: Record<string, Record<string, AnswerValue>>;
 };
 
-const companyActivities: Record<string, string[]> = {
-  "Saúde Tech": ["Operação de empilhadeira", "Levantamento de caixas"],
-  UFLAniana: ["Digitação intensa", "Atendimento ao público"],
-  "Nova Safra": ["Separação de pedidos", "Montagem de kits"],
-  "Logis Minas": ["Deslocamento de carga", "Conferência de estoque"],
-};
-const unlinkedActivities = [
-  "Digitação intensa",
-  "Levantamento de caixas",
-  "Separação de pedidos",
-  "Atividade sem vinculação",
-];
-
 function emptyState(item?: CaseWorkflowRecord): CaseWorkflowState {
-  if (item?.workflow) return item.workflow;
+  if (item?.workflow) return { ...item.workflow, disease: item.workflow.disease ?? item.injury, conditions: item.workflow.conditions.slice(0, 1) };
   return {
     name: item?.name ?? "",
+    disease: item?.injury ?? '',
     associatedCompany: Boolean(item?.company),
     company: item?.company ?? "",
     associatedSector: Boolean(item?.sector),
@@ -94,12 +86,14 @@ export function CaseWorkflow({
   mode,
   companies,
   conditions,
+  existingCodes,
   onSave,
 }: {
   item?: CaseWorkflowRecord;
   mode: "create" | "edit" | "view";
   companies: SimpleEntity[];
   conditions: ConditionEntity[];
+  existingCodes: string[];
   onSave: (item: CaseWorkflowRecord) => void;
 }) {
   const readOnly = mode === "view";
@@ -108,7 +102,7 @@ export function CaseWorkflow({
   const [state, setState] = useState<CaseWorkflowState>(() => {
     if (!readOnly && typeof window !== "undefined") {
       const stored = window.sessionStorage.getItem(draftKey);
-      if (stored) return JSON.parse(stored) as CaseWorkflowState;
+      if (stored) { const restored = JSON.parse(stored) as CaseWorkflowState; return { ...restored, disease: restored.disease ?? item?.injury ?? '', conditions: restored.conditions.slice(0, 1) }; }
     }
     return emptyState(item);
   });
@@ -155,6 +149,8 @@ export function CaseWorkflow({
   const validate = () => {
     const nextErrors: string[] = [];
     if (!state.name.trim()) nextErrors.push("Informe o nome do trabalhador.");
+    if (!conditions.some((entry) => entry.name === state.disease && entry.status === 'Ativa')) nextErrors.push('Selecione uma doença alegada ativa.');
+    if (state.conditions.some((entry) => entry.answers.PROFILE_CONFIRM === 'Não')) nextErrors.push('Confira e confirme os dados pré-preenchidos pelo catálogo.');
     if (state.associatedCompany && !state.company)
       nextErrors.push("Selecione a empresa associada.");
     if (state.associatedSector && !state.sector)
@@ -197,10 +193,7 @@ export function CaseWorkflow({
       .submitter as HTMLButtonElement | null;
     const draft = submitter?.value === "draft" || submitter?.value === "true";
     if (!draft && !validate()) return;
-    const conditionName = String(
-      state.conditions[0]?.answers.COND03 ||
-        "Condição sem diagnóstico específico",
-    );
+    const conditionName = state.disease ?? '';
     const cid =
       conditions.find((entry) => entry.name === conditionName)?.cid ?? "";
     const principals = state.activities
@@ -210,10 +203,12 @@ export function CaseWorkflow({
     // US01 leaves the percentage formula as XYZ/XXX.
     const score = 0;
     window.sessionStorage.removeItem(draftKey);
+    const prefix = (state.associatedCompany ? state.company : 'SEM').slice(0, 3).toUpperCase();
+    const sequence = Math.max(0, ...existingCodes.filter((code) => code.startsWith(`${prefix}-`)).map((code) => Number(code.slice(prefix.length + 1)) || 0)) + 1;
     onSave({
       id:
         item?.id ??
-        `${(state.company || "SEM").slice(0, 3).toUpperCase()}-${String(Date.now()).slice(-3)}`,
+        `${prefix}-${String(sequence).padStart(3, '0')}`,
       name: state.name.trim(),
       injury: conditionName,
       cid,
@@ -233,7 +228,7 @@ export function CaseWorkflow({
         {(
           [
             ["identification", "1", "Identificação"],
-            ["condition", "2", "Condição alegada"],
+            ["condition", "2", "Doença alegada"],
             ["activity", "3", "Atividade realizada"],
             ["timeline", "4", "Linha do tempo"],
           ] as const
@@ -274,6 +269,7 @@ export function CaseWorkflow({
             title="Informações básicas"
             text="Identificação e vínculos organizacionais do caso."
           />
+          {item && <div className="case-identifiers"><div><small>Código do caso</small><strong>{item.id}</strong></div><div><small>Situação do cadastro</small><strong>{item.status}</strong></div></div>}
           <Field label="Nome do trabalhador" required>
             <input
               disabled={readOnly}
@@ -306,26 +302,19 @@ export function CaseWorkflow({
                 DISPONÍVEL PORQUE O CASO É ASSOCIADO A UMA EMPRESA
               </p>
               <Field label="Empresa associada" required>
-                <select
-                  disabled={readOnly}
-                  value={state.company}
-                  onChange={(event) =>
+                <SearchableSelect label="Empresa associada" options={companies.map((entry) => ({ value: entry.name, label: entry.name }))} disabled={readOnly} value={state.company} onChange={(values) =>
                     patch({
-                      company: event.target.value,
+                      company: values[0] ?? '',
+                      associatedSector: false,
                       sector: "",
                       activities: state.activities.map((entry) => ({
                         ...entry,
                         name: "",
                       })),
                     })
-                  }
-                >
-                  <option value="">Selecione a empresa</option>
-                  {companies.map((entry) => (
-                    <option key={entry.id}>{entry.name}</option>
-                  ))}
-                </select>
+                  } placeholder="Pesquisar empresa" />
               </Field>
+              {state.company && <>
               <Toggle
                 label="Esse caso é associado a algum setor?"
                 value={state.associatedSector}
@@ -339,22 +328,13 @@ export function CaseWorkflow({
               />
               {state.associatedSector && (
                 <Field label="Setor da empresa" required>
-                  <select
+                  <SearchableSelect label="Setor da empresa" options={sectors.map((name) => ({ value: name, label: name }))}
                     disabled={readOnly || !state.company}
                     value={state.sector}
-                    onChange={(event) => patch({ sector: event.target.value })}
-                  >
-                    <option value="">
-                      {state.company
-                        ? "Selecione o setor"
-                        : "Selecione primeiro a empresa"}
-                    </option>
-                    {sectors.map((sector) => (
-                      <option key={sector}>{sector}</option>
-                    ))}
-                  </select>
+                    onChange={(values) => patch({ sector: values[0] ?? '' })} placeholder="Pesquisar setor" />
                 </Field>
               )}
+              </>}
             </div>
           )}
           <div className="step-actions">
@@ -363,7 +343,7 @@ export function CaseWorkflow({
               className="primary-button"
               onClick={() => setStep("condition")}
             >
-              Continuar para condição
+              Continuar para doença
             </button>
           </div>
         </section>
@@ -373,28 +353,35 @@ export function CaseWorkflow({
         <section className="form-section">
           <SectionTitle
             icon={<Activity size={17} />}
-            title="Condição alegada"
-            text="Questionário aplicado separadamente para cada condição."
+            title="Doença alegada"
+            text="Selecione a doença cadastrada e preencha seu questionário."
           />
-          {state.conditions.map((entry, index) => (
+          <Field label="Doença alegada" required>
+            <SearchableSelect label="Doença alegada" options={conditions.filter((entry) => entry.status === 'Ativa' || readOnly && entry.name === state.disease).map((entry) => ({ value: entry.name, label: entry.name, description: entry.cid }))} value={state.disease ?? ''} disabled={readOnly} placeholder="Pesquisar doença por nome ou CID" onChange={(values) => {
+              const disease = values[0] ?? '';
+              const profile = catalogProfiles.find((entry) => entry.name === disease);
+              const entry = state.conditions[0];
+              const answers: Record<string, AnswerValue> = { ...entry.answers, COND03: disease };
+              Object.keys(answers).filter((key) => key.startsWith('CUSTOM_') || /^COND0[567]_RC/.test(key)).forEach((key) => delete answers[key]);
+              delete answers.PROFILE_CONFIRM;
+              if (profile) {
+                answers.COND01 = profile.nature;
+                answers.COND04 = regionData.filter((region) => profile.regions.includes(region.code)).map((region) => region.name);
+                for (const code of profile.regions) { answers[`COND06_${code}`] = profile.structures.map((structure) => structure[0].toUpperCase() + structure.slice(1)); answers[`COND07_${code}`] = profile.movements; }
+                answers.PROFILE_CONFIRM = 'Não';
+              }
+              patch({ disease, conditions: [{ ...entry, answers }] });
+            }} />
+          </Field>
+          {state.conditions.slice(0, 1).map((entry) => (
             <div className="workflow-instance" key={entry.id}>
               <InstanceHeader
-                title={`Condição ${index + 1}`}
-                onRemove={
-                  !readOnly && state.conditions.length > 1
-                    ? () =>
-                        patch({
-                          conditions: state.conditions.filter(
-                            (condition) => condition.id !== entry.id,
-                          ),
-                        })
-                    : undefined
-                }
+                title="Questionário da doença alegada"
               />
               <Questionnaire
                 questions={[
                   ...conditionQuestions.filter((question) => question.id !== "COND10" || state.activities.some((activity) => activity.name)).map((question) => question.id === "COND10" ? { ...question, options: [...state.activities.filter((activity) => activity.name).map((activity) => activity.name), "Nenhuma", "Não sabe"] } : question.id === "COND03" ? { ...question, options: [...new Set([...(question.options ?? []).filter((name) => !conditions.some((condition) => condition.name === name && condition.status !== "Ativa")), ...conditions.filter((condition) => condition.status === "Ativa").map((condition) => condition.name)])] } : question),
-                  ...(conditions.find((condition) => condition.name === entry.answers.COND03)?.questions ?? []).map((question): WorkflowQuestion => ({ id: `CUSTOM_${question.id}`, dimension: "Perguntas adicionais", title: question.title, type: question.type === "Valor numérico" ? "number" : question.type === "Seleção múltipla" ? "multi" : "select", options: question.options.map((option) => option.label) })),
+                  ...(conditions.find((condition) => condition.name === state.disease)?.questions ?? []).map((question): WorkflowQuestion => ({ id: `CUSTOM_${question.id}`, dimension: "Perguntas adicionais", title: question.title, type: question.type === "Valor numérico" ? "number" : question.type === "Seleção múltipla" ? "multi" : "select", options: question.options.map((option) => option.label) })),
                 ]}
                 answers={entry.answers}
                 context={{ LT05: "Sim", LT08: Object.entries(state.timelineAnswers).some(([key, answers]) => key.startsWith(`${entry.id}::`) && answers.LT05 === "Sim" && answers.LT08 === "Sim") ? "Sim" : "Não" }}
@@ -403,22 +390,6 @@ export function CaseWorkflow({
               />
             </div>
           ))}
-          {!readOnly && (
-            <button
-              type="button"
-              className="secondary-button"
-              onClick={() =>
-                patch({
-                  conditions: [
-                    ...state.conditions,
-                    { id: `condition-${Date.now()}`, answers: {} },
-                  ],
-                })
-              }
-            >
-              <Plus size={13} /> Adicionar condição alegada
-            </button>
-          )}
           <div className="step-actions">
             <button
               type="button"
@@ -471,21 +442,14 @@ export function CaseWorkflow({
                 }
               />
               <Field label="Selecionar atividade" required>
-                <select
+                <SearchableSelect label={`Atividade ${index + 1}`} options={[...activityOptions.map((name) => ({ value: name, label: name })), { value: '__other__', label: 'Outros', description: 'Informar uma atividade não cadastrada' }]}
                   disabled={
                     readOnly || (state.associatedCompany && !state.company)
                   }
-                  value={entry.name}
-                  onChange={(event) =>
-                    patchActivity(entry.id, { name: event.target.value })
-                  }
-                >
-                  <option value="">Selecione a atividade</option>
-                  {activityOptions.map((name) => (
-                    <option key={name}>{name}</option>
-                  ))}
-                </select>
+                  value={entry.other ? '__other__' : entry.name}
+                  onChange={(values) => patchActivity(entry.id, { other: values[0] === '__other__', name: values[0] === '__other__' ? '' : values[0] ?? '' })} placeholder="Pesquisar atividade" />
               </Field>
+              {entry.other && <Field label="Nome da outra atividade" required><input disabled={readOnly} maxLength={255} value={entry.name} onChange={(event) => patchActivity(entry.id, { name: event.target.value })} placeholder="Descreva a atividade realizada" /></Field>}
               <Questionnaire
                 questions={activityQuestions}
                 answers={entry.answers}
@@ -540,14 +504,14 @@ export function CaseWorkflow({
             title="Linha do tempo"
             text="Campos calculados reaproveitam as datas anteriores e não são perguntados novamente."
           />
-          {state.conditions.flatMap((condition, conditionIndex) =>
+          {state.conditions.slice(0, 1).flatMap((condition) =>
             state.activities.map((activity, activityIndex) => {
               const key = `${condition.id}::${activity.id}`;
               const answers = state.timelineAnswers[key] ?? {};
               return (
                 <div className="workflow-instance" key={key}>
                   <InstanceHeader
-                    title={`Condição ${conditionIndex + 1} × Atividade ${activityIndex + 1}`}
+                    title={`Doença alegada × Atividade ${activityIndex + 1}`}
                     badge={activity.name || "Atividade ainda não selecionada"}
                   />
                   <Questionnaire
@@ -698,6 +662,7 @@ function QuestionInput({
   if (question.type === "select")
     if (question.options?.length === 1 && question.options[0] === 'Central') return <p>Central — não se aplica lateralidade.</p>;
   if (question.type === 'text') return <input type="text" maxLength={255} disabled={disabled} value={typeof value === 'string' ? value : ''} onChange={(event) => onChange(event.target.value)} />;
+  if (question.id === 'COND03') return <SearchableSelect label={question.title} options={(question.options ?? []).map((name) => ({ value: name, label: name }))} value={typeof value === 'string' ? value : ''} onChange={(values) => onChange(values[0] ?? '')} disabled={disabled} placeholder="Pesquisar diagnóstico específico" />;
   if (question.type === "select")
     return (
       <div className="answer-options">
@@ -862,14 +827,15 @@ function Field({
   required?: boolean;
   children: ReactNode;
 }) {
+  const Container = isValidElement(children) && children.type === SearchableSelect ? 'div' : 'label';
   return (
-    <label className="field">
+    <Container className="field">
       <span>
         {label}
         {required && <b>*</b>}
       </span>
       {children}
-    </label>
+    </Container>
   );
 }
 function Toggle({

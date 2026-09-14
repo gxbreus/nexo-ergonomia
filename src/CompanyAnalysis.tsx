@@ -10,7 +10,7 @@ export function CompanyAnalysis({ name, cases }: { name: string; cases: CaseWork
   const frequency = (field: 'injury' | 'activity') => {
     const groups = new Map<string, CaseWorkflowRecord[]>();
     for (const item of linked) {
-      const names = field === 'activity' ? item.workflow?.activities.map((activity) => activity.name) ?? item.activity.split(', ') : item.workflow?.conditions.map((condition) => String(condition.answers.COND03 || condition.answers.COND01 || 'Sem diagnóstico definido')) ?? [item.injury];
+      const names = field === 'activity' ? item.workflow?.activities.map((activity) => activity.name) ?? item.activity.split(', ') : [item.injury];
       for (const value of new Set(names.filter(Boolean))) groups.set(value, [...(groups.get(value) ?? []), item]);
     }
     return [...groups.entries()].sort((a, b) => b[1].length - a[1].length).slice(0, 3);

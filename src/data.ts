@@ -1,4 +1,4 @@
-export type CaseStatus = 'Concluído' | 'Em cadastro' | 'Desatualizado';
+export type CaseStatus = 'Concluído' | 'Em cadastro' | 'Desatualizado' | 'Desativado';
 export type ConditionStatus = 'Ativa' | 'Em cadastro' | 'Desativada';
 
 export const cases = [
@@ -10,11 +10,18 @@ export const cases = [
 ];
 
 export const companies = [
-  { id:'EMP-018',name:'Saúde Tech',initials:'ST',total:15,complete:13,drafts:2,average:78,priority:3 },
-  { id:'EMP-017',name:'UFLAniana',initials:'UF',total:9,complete:7,drafts:2,average:66,priority:1 },
-  { id:'EMP-016',name:'Nova Safra',initials:'NS',total:7,complete:6,drafts:1,average:73,priority:2 },
-  { id:'EMP-015',name:'Logis Minas',initials:'LM',total:4,complete:4,drafts:0,average:59,priority:0 },
-];
+  { id:'EMP-018',name:'Saúde Tech',initials:'ST',total:15,complete:13,drafts:2,average:78,priority:3, sectors: [{ id:'ST-TI',name:'TI',caseIds:[] as string[] }, { id:'ST-OP',name:'Operações',caseIds:[] as string[] }] },
+  { id:'EMP-017',name:'UFLAniana',initials:'UF',total:9,complete:7,drafts:2,average:66,priority:1, sectors: [{ id:'UF-TI',name:'TI',caseIds:[] as string[] }, { id:'UF-OP',name:'Operações',caseIds:[] as string[] }] },
+  { id:'EMP-016',name:'Nova Safra',initials:'NS',total:7,complete:6,drafts:1,average:73,priority:2, sectors: [{ id:'NS-TI',name:'TI',caseIds:[] as string[] }, { id:'NS-OP',name:'Operações',caseIds:[] as string[] }] },
+  { id:'EMP-015',name:'Logis Minas',initials:'LM',total:4,complete:4,drafts:0,average:59,priority:0, sectors: [{ id:'LM-TI',name:'TI',caseIds:[] as string[] }, { id:'LM-OP',name:'Operações',caseIds:[] as string[] }] },
+].map((company) => ({
+  ...company,
+  sectors: [
+    ...company.sectors,
+    { id: `${company.id}-ADM`, name: 'Administrativo', caseIds: [] as string[] },
+    { id: `${company.id}-FIN`, name: 'Financeiro', caseIds: [] as string[] },
+  ],
+}));
 
 export const conditions = [
   { id:'CON-031',name:'Síndrome do túnel do carpo',type:'Doença',cid:'G56.0',region:'Punho e mão',side:'Bilateral',status:'Ativa' as ConditionStatus,cases:7 },

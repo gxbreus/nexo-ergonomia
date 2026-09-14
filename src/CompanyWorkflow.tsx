@@ -1,5 +1,6 @@
 import { useState, type ReactNode } from "react";
 import { Building2, Plus, Trash2, Users } from "lucide-react";
+import { SearchableSelect } from './SearchableSelect';
 
 type CaseItem = {
   id: string;
@@ -57,7 +58,6 @@ export function CompanyWorkflow({
   const submit = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const selected = hasPrevious ? linked : [];
-    if (hasPrevious && !selected.length) { setError('Selecione ao menos um caso prévio ou desative a associação.'); return; }
     if (addSector && (!sectors.length || sectors.some((sector) => !sector.name.trim() || !sector.caseIds.some((id) => selected.includes(id))))) {
       setError('Adicione ao menos um setor e informe o nome e os casos associados de cada setor.'); return;
     }
@@ -129,29 +129,7 @@ export function CompanyWorkflow({
             </p>
             <div className="case-linker">
               <label>Casos do usuário sem vinculação com empresa</label>
-              {eligibleCases.map((entry) => (
-                <button
-                  type="button"
-                  disabled={readOnly}
-                  className={linked.includes(entry.id) ? "selected" : ""}
-                  key={entry.id}
-                  onClick={() =>
-                    setLinked((ids) =>
-                      ids.includes(entry.id)
-                        ? ids.filter((id) => id !== entry.id)
-                        : [...ids, entry.id],
-                    )
-                  }
-                >
-                  <span>{linked.includes(entry.id) ? "✓" : "+"}</span>
-                  <div>
-                    <strong>{entry.name}</strong>
-                    <small>
-                      {entry.injury} · {entry.id}
-                    </small>
-                  </div>
-                </button>
-              ))}
+              <SearchableSelect label="Casos associados" multiple disabled={readOnly} options={eligibleCases.map((entry) => ({ value: entry.id, label: entry.name, description: `${entry.id} · ${entry.injury}` }))} value={linked} onChange={(values) => { setLinked(values); setSectors((items) => items.map((sector) => ({ ...sector, caseIds: sector.caseIds.filter((id) => values.includes(id)) }))); }} placeholder="Pesquisar e selecionar casos" />
             </div>
           </div>
         )}
@@ -210,46 +188,7 @@ export function CompanyWorkflow({
                 </Field>
                 <div className="case-linker sector-cases">
                   <label>Associar casos da empresa sem setor</label>
-                  {linkedCases
-                    .filter(
-                      (entry) =>
-                        !assigned.has(entry.id) ||
-                        sector.caseIds.includes(entry.id),
-                    )
-                    .map((entry) => (
-                      <button
-                        type="button"
-                        disabled={readOnly}
-                        className={
-                          sector.caseIds.includes(entry.id) ? "selected" : ""
-                        }
-                        key={entry.id}
-                        onClick={() =>
-                          setSectors((items) =>
-                            items.map((current) =>
-                              current.id === sector.id
-                                ? {
-                                    ...current,
-                                    caseIds: current.caseIds.includes(entry.id)
-                                      ? current.caseIds.filter(
-                                          (id) => id !== entry.id,
-                                        )
-                                      : [...current.caseIds, entry.id],
-                                  }
-                                : current,
-                            ),
-                          )
-                        }
-                      >
-                        <span>
-                          {sector.caseIds.includes(entry.id) ? "✓" : "+"}
-                        </span>
-                        <div>
-                          <strong>{entry.name}</strong>
-                          <small>{entry.id}</small>
-                        </div>
-                      </button>
-                    ))}
+                  <SearchableSelect label={`Casos do setor ${index + 1}`} multiple disabled={readOnly} options={linkedCases.filter((entry) => !assigned.has(entry.id) || sector.caseIds.includes(entry.id)).map((entry) => ({ value: entry.id, label: entry.name, description: entry.id }))} value={sector.caseIds} onChange={(values) => setSectors((items) => items.map((current) => current.id === sector.id ? { ...current, caseIds: values } : current))} placeholder="Pesquisar casos sem setor" />
                 </div>
               </article>
             ))}
