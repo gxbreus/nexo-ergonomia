@@ -237,6 +237,7 @@ export function CaseWorkflow({
             type="button"
             key={id}
             className={step === id ? "active" : ""}
+            aria-current={step === id ? "step" : undefined}
             onClick={() => setStep(id)}
           >
             <span>{number}</span>
@@ -671,6 +672,7 @@ function QuestionInput({
             type="button"
             disabled={disabled}
             className={value === option ? "selected" : ""}
+            aria-pressed={value === option}
             key={option}
             onClick={() => onChange(option)}
           >
@@ -688,6 +690,7 @@ function QuestionInput({
             type="button"
             disabled={disabled}
             className={selected.includes(option) ? "selected" : ""}
+            aria-pressed={selected.includes(option)}
             key={option}
             onClick={() =>
               onChange(
@@ -860,7 +863,9 @@ function Toggle({
         disabled={disabled}
         className={`switch ${value ? "on" : ""}`}
         onClick={onChange}
-        aria-pressed={value}
+        role="switch"
+        aria-checked={value}
+        aria-label={label}
       >
         <i />
       </button>

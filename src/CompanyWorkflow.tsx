@@ -277,6 +277,9 @@ function Toggle({
         disabled={disabled}
         className={`switch ${value ? "on" : ""}`}
         onClick={onChange}
+        role="switch"
+        aria-checked={value}
+        aria-label={label}
       >
         <i />
       </button>

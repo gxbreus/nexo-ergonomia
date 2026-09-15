@@ -2,15 +2,19 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   Activity,
   AlertTriangle,
+  Bell,
   Building2,
   ChevronLeft,
   ClipboardList,
   CheckCircle2,
+  CircleHelp,
+  Database,
   Edit3,
   Eye,
   FilePlus2,
   Plus,
   Search,
+  SlidersHorizontal,
   Power,
   Trash2,
   X,
@@ -115,25 +119,19 @@ function useStoredRecords<T extends { id: string }>(key: string, seed: T[]) {
 
 export default function App() {
   const [view, setView] = useState<View>("cases");
-  const [caseItems, setCaseItems] = useStoredRecords<CaseItem>("nexo-cases-v3", [
-    ...cases,
-    {
-      id: "CAS-0243",
-      name: "Luiza Melo",
-      injury: "Dor lombar baixa",
-      cid: "M54.5",
-      company: "",
-      activity: "Atividade sem vinculação",
-      status: "Em cadastro",
-      score: 0,
-    },
-  ]);
-  const [companyItems, setCompanyItems] = useStoredRecords<CompanyItem>("nexo-companies-v3", companies);
+  const [caseItems, setCaseItems] = useStoredRecords<CaseItem>(
+    "nexo-cases-v5",
+    cases,
+  );
+  const [companyItems, setCompanyItems] = useStoredRecords<CompanyItem>(
+    "nexo-companies-v5",
+    companies,
+  );
   const countedCompanies = companyItems.map((company) => {
     const linked = caseItems.filter((entry) => entry.company === company.name);
     return { ...company, total: linked.length, complete: linked.filter((entry) => entry.status === 'Concluído').length, drafts: linked.filter((entry) => entry.status === 'Em cadastro').length };
   });
-  const [conditionItems, setConditionItems] = useStoredRecords<ConditionItem>("nexo-conditions-v3",
+  const [conditionItems, setConditionItems] = useStoredRecords<ConditionItem>("nexo-conditions-v5",
     conditions.map((item) => ({
       ...item,
       type: item.type as "Doença" | "Lesão",
@@ -155,7 +153,7 @@ export default function App() {
       const seed = companies.find((entry) => entry.id === company.id);
       if (!seed) return company;
       const existing = company.sectors ?? [];
-      return { ...company, sectors: [...existing, ...seed.sectors.filter((sector) => !existing.some((entry) => entry.name === sector.name))] };
+      return { ...company, sectors: [...existing, ...(seed.sectors ?? []).filter((sector) => !existing.some((entry) => entry.name === sector.name))] };
     }));
     localStorage.setItem('nexo-placeholder-sectors-v2', 'true');
   }, [setCompanyItems]);
@@ -225,6 +223,9 @@ export default function App() {
 
   return (
     <div className="app-shell">
+      <a className="skip-link" href="#main-content">
+        Pular para o conteúdo principal
+      </a>
       <aside className="sidebar">
         <div className="brand">
           <img className="brand-mark" src="/nexo-logo-light.svg" alt="NEXO" />
@@ -244,6 +245,7 @@ export default function App() {
             <button
               key={id}
               className={`nav-item ${view === id ? "active" : ""}`}
+              aria-current={view === id ? "page" : undefined}
               onClick={() => {
                 setView(id);
                 setQuery("");
@@ -257,17 +259,17 @@ export default function App() {
               }}
             >
               <span className="nav-icon">
-                <Icon size={15} />
+                <Icon size={15} aria-hidden="true" />
               </span>
               <span>{label}</span>
             </button>
           ))}
         </nav>
         <div className="sidebar-note">
-          <span>✦</span>
+          <Database size={16} aria-hidden="true" />
           <div>
-            <strong>Dados demonstrativos</strong>
-            <small>Sem conexão com backend</small>
+            <strong>Base demonstrativa completa</strong>
+            <small>Dados locais baseados nas histórias</small>
           </div>
         </div>
         <div className="profile">
@@ -278,7 +280,7 @@ export default function App() {
           </div>
         </div>
       </aside>
-      <main className="workspace">
+      <main className="workspace" id="main-content">
         <header className="topbar">
           <div className="breadcrumbs">
             <button
@@ -291,8 +293,12 @@ export default function App() {
             <strong>{title}</strong>
           </div>
           <div className="top-actions">
-            <button className="help-button">Ajuda</button>
-            <button className="icon-button">●</button>
+            <button className="help-button">
+              <CircleHelp size={16} aria-hidden="true" /> Ajuda
+            </button>
+            <button className="icon-button" aria-label="Notificações">
+              <Bell size={16} aria-hidden="true" />
+            </button>
           </div>
         </header>
         <section className="page">
@@ -342,9 +348,10 @@ export default function App() {
                 </label>
                 <button
                   className={`filter-button ${filterOpen ? "active" : ""}`}
+                  aria-expanded={filterOpen}
                   onClick={() => setFilterOpen(!filterOpen)}
                 >
-                  Filtros {activeFilters > 0 && <b>{activeFilters}</b>}
+                  <SlidersHorizontal size={15} aria-hidden="true" /> Filtros {activeFilters > 0 && <b>{activeFilters}</b>}
                 </button>
                 <button
                   className="search-action"
@@ -736,9 +743,9 @@ function CaseMetrics({ items }: { items: CaseItem[] }) {
         <small>Podem ser retomados a qualquer momento</small>
       </article>
       <article className="metric-card">
-        <span className="metric-label">ÍNDICE ELEVADO</span>
-        <strong>{items.filter((item) => item.score >= 80).length}</strong>
-        <small>Compatibilidade acima de 80%</small>
+        <span className="metric-label">CONCLUÍDOS</span>
+        <strong>{completed}</strong>
+        <small>Com respostas prontas para o índice</small>
       </article>
       <article className="metric-card">
         <span className="metric-label">DESATUALIZADOS</span>
@@ -771,11 +778,11 @@ function CompanyOverview({ items }: { items: CompanyItem[] }) {
         </i>
       </div>
       <div className="overview-stat">
-        <span>Casos prioritários</span>
+        <span>Em cadastro</span>
         <strong className="red">
-          {items.reduce((sum, item) => sum + item.priority, 0)}
+          {items.reduce((sum, item) => sum + item.drafts, 0)}
         </strong>
-        <p>Índice superior a 80%</p>
+        <p>Podem ser retomados pelo ergonomista</p>
       </div>
     </div>
   );
@@ -974,20 +981,8 @@ function CompanyList({
               RASCUNHOS<b>{item.drafts}</b>
             </span>
           </div>
-          <div className="company-score">
-            <span>
-              Compatibilidade média <b>{item.average}%</b>
-            </span>
-            <i>
-              <b style={{ width: `${item.average}%` }} />
-            </i>
-          </div>
           <div className="company-footer">
-            <span className={item.priority ? "priority" : ""}>
-              {item.priority
-                ? `${item.priority} prioritários`
-                : "Sem prioridade"}
-            </span>
+            <span>Dados demonstrativos</span>
             <div>
               <button onClick={() => onOpen("companies", "analytics", item.id)}>
                 Análise
@@ -1137,8 +1132,8 @@ function SearchPrompt() {
       <Search size={24} />
       <strong>Selecione pelo menos um campo de busca</strong>
       <span>
-        Informe um termo ou filtro e use a ação “Pesquisar” para visualizar os
-        resultados.
+        Informe um nome, como “Ana Ribeiro”, ou use um filtro e selecione
+        “Pesquisar” para visualizar os resultados.
       </span>
     </div>
   );
@@ -1266,11 +1261,22 @@ function FullScreenForm({
   onDeactivate: (id: string) => void;
 }) {
   const scrollBody = useRef<HTMLDivElement>(null);
+  const closeButton = useRef<HTMLButtonElement>(null);
+  const onCloseRef = useRef(onClose);
+  useEffect(() => { onCloseRef.current = onClose; }, [onClose]);
   useEffect(() => { scrollBody.current?.scrollTo(0, 0); }, [overlay.id, overlay.mode]);
   useEffect(() => {
     const previous = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
-    return () => { document.body.style.overflow = previous; };
+    closeButton.current?.focus();
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onCloseRef.current();
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.body.style.overflow = previous;
+      window.removeEventListener("keydown", onKeyDown);
+    };
   }, []);
   const item =
     overlay.entity === "cases"
@@ -1300,11 +1306,16 @@ function FullScreenForm({
               : `Detalhes ${overlay.entity === 'cases' ? 'do' : 'da'} ${label.toLowerCase()}`;
   return (
     <div className="overlay">
-      <div className="drawer wide fullscreen-drawer">
+      <div
+        className="drawer wide fullscreen-drawer"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="drawer-title"
+      >
         <header className="drawer-header">
           <div>
-            <button onClick={onClose}>
-              <ChevronLeft size={18} />
+            <button onClick={onClose} aria-label={`Voltar para ${label.toLowerCase()}s`}>
+              <ChevronLeft size={18} aria-hidden="true" />
             </button>
             <div>
               <span>
@@ -1313,11 +1324,11 @@ function FullScreenForm({
                   ? "NOVO REGISTRO"
                   : ({ edit: 'EDIÇÃO', view: 'VISUALIZAÇÃO', success: 'CONCLUÍDO', index: 'ÍNDICE', history: 'HISTÓRICO', analytics: 'ANÁLISE' } as Record<string, string>)[overlay.mode]}
               </span>
-              <h2>{title}</h2>
+              <h2 id="drawer-title">{title}</h2>
             </div>
           </div>
-          <button onClick={onClose}>
-            <X size={17} />
+          <button ref={closeButton} onClick={onClose} aria-label="Fechar">
+            <X size={17} aria-hidden="true" />
           </button>
         </header>
         <div className="drawer-body" ref={scrollBody}>
@@ -2341,7 +2352,9 @@ function Toggle({
         type="button"
         disabled={disabled}
         onClick={onChange}
-        aria-pressed={value}
+        role="switch"
+        aria-checked={value}
+        aria-label={label}
       >
         <i />
       </button>
