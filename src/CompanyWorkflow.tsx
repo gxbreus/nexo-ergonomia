@@ -20,6 +20,7 @@ export type CompanyWorkflowRecord = {
   average: number;
   priority: number;
   sectors?: SectorEntry[];
+  manualLinkedCases?: string[];
 };
 type SectorEntry = { id: string; name: string; caseIds: string[] };
 
@@ -41,9 +42,9 @@ export function CompanyWorkflow({
   );
   const [linked, setLinked] = useState<string[]>(
     item
-      ? cases
+      ? [...cases
           .filter((entry) => entry.company === item.name)
-          .map((entry) => entry.id)
+          .map((entry) => entry.id), ...(item.manualLinkedCases ?? [])]
       : [],
   );
   const [addSector, setAddSector] = useState(Boolean(item?.sectors?.length));
@@ -52,7 +53,11 @@ export function CompanyWorkflow({
   const eligibleCases = cases.filter(
     (entry) => !entry.company || linked.includes(entry.id),
   );
-  const linkedCases = cases.filter((entry) => linked.includes(entry.id));
+  const manualLinked = linked.filter((id) => !cases.some((entry) => entry.id === id));
+  const linkedCaseOptions = linked.map((id) => {
+    const caseItem = cases.find((entry) => entry.id === id);
+    return caseItem ? { value: caseItem.id, label: caseItem.name, description: `${caseItem.id} · ${caseItem.injury}` } : { value: id, label: id, description: 'Informado manualmente' };
+  });
   const assigned = new Set(sectors.flatMap((sector) => sector.caseIds));
 
   const submit = (event: React.FormEvent<HTMLFormElement>) => {
@@ -89,6 +94,7 @@ export function CompanyWorkflow({
         average: item?.average ?? 0,
         priority: item?.priority ?? 0,
         sectors: addSector ? sectors.map((sector) => ({ ...sector, name: sector.name.trim(), caseIds: sector.caseIds.filter((id) => selected.includes(id)) })) : [],
+        manualLinkedCases: selected.filter((id) => !cases.some((entry) => entry.id === id)),
       },
       selected,
     );
@@ -129,7 +135,7 @@ export function CompanyWorkflow({
             </p>
             <div className="case-linker">
               <label>Casos do usuário sem vinculação com empresa</label>
-              <SearchableSelect label="Casos associados" multiple allowCustom={false} disabled={readOnly} options={eligibleCases.map((entry) => ({ value: entry.id, label: entry.name, description: `${entry.id} · ${entry.injury}` }))} value={linked} onChange={(values) => { setLinked(values); setSectors((items) => items.map((sector) => ({ ...sector, caseIds: sector.caseIds.filter((id) => values.includes(id)) }))); }} placeholder="Pesquisar e selecionar casos" />
+              <SearchableSelect label="Casos associados" multiple disabled={readOnly} options={[...eligibleCases.map((entry) => ({ value: entry.id, label: entry.name, description: `${entry.id} · ${entry.injury}` })), ...manualLinked.map((name) => ({ value: name, label: name, description: 'Informado manualmente' }))]} value={linked} onChange={(values) => { setLinked(values); setSectors((items) => items.map((sector) => ({ ...sector, caseIds: sector.caseIds.filter((id) => values.includes(id)) }))); }} placeholder="Pesquisar e selecionar casos" />
             </div>
           </div>
         )}
@@ -188,7 +194,7 @@ export function CompanyWorkflow({
                 </Field>
                 <div className="case-linker sector-cases">
                   <label>Associar casos da empresa sem setor</label>
-                  <SearchableSelect label={`Casos do setor ${index + 1}`} multiple allowCustom={false} disabled={readOnly} options={linkedCases.filter((entry) => !assigned.has(entry.id) || sector.caseIds.includes(entry.id)).map((entry) => ({ value: entry.id, label: entry.name, description: entry.id }))} value={sector.caseIds} onChange={(values) => setSectors((items) => items.map((current) => current.id === sector.id ? { ...current, caseIds: values } : current))} placeholder="Pesquisar casos sem setor" />
+                  <SearchableSelect label={`Casos do setor ${index + 1}`} multiple disabled={readOnly} options={linkedCaseOptions.filter((entry) => !assigned.has(entry.value) || sector.caseIds.includes(entry.value))} value={sector.caseIds} onChange={(values) => { setLinked((current) => [...new Set([...current, ...values])]); setSectors((items) => items.map((current) => current.id === sector.id ? { ...current, caseIds: values } : current)); }} placeholder="Pesquisar casos sem setor" />
                 </div>
               </article>
             ))}

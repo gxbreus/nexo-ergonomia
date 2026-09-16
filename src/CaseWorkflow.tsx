@@ -159,7 +159,7 @@ export function CaseWorkflow({
   const validate = () => {
     const nextErrors: string[] = [];
     if (!state.name.trim()) nextErrors.push("Informe o nome do trabalhador.");
-    if (!conditions.some((entry) => entry.name === state.disease && entry.status === 'Ativa')) nextErrors.push('Selecione uma doença alegada ativa.');
+    if (!(state.disease ?? '').trim()) nextErrors.push('Selecione ou informe a doença alegada.');
     if (state.conditions.some((entry) => entry.answers.PROFILE_CONFIRM === 'Não')) nextErrors.push('Confira e confirme os dados pré-preenchidos pelo catálogo.');
     if (state.associatedCompany && !state.company)
       nextErrors.push("Selecione a empresa associada.");

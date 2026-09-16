@@ -629,25 +629,25 @@ function FilterPanel({
           <>
             <div className="filter-field">
               <span>Empresa</span>
-              <SearchableSelect label="Empresa" allowCustom={false} options={[...companies.map((item) => ({ value: item.name, label: item.name })), { value: 'Sem empresa', label: 'Sem empresa' }]} value={extra === 'Todos' ? '' : extra} onChange={(values) => onExtra(values[0] ?? 'Todos')} placeholder="Pesquisar empresa" />
+              <SearchableSelect label="Empresa" options={[...companies.map((item) => ({ value: item.name, label: item.name })), { value: 'Sem empresa', label: 'Sem empresa' }]} value={extra === 'Todos' ? '' : extra} onChange={(values) => onExtra(values[0] ?? 'Todos')} placeholder="Pesquisar empresa" />
             </div>
             <div className="filter-field">
               <span>Doença</span>
-              <SearchableSelect label="Doença" multiple allowCustom={false} options={conditions.filter((item) => item.status === 'Ativa').map((item) => ({ value: item.name, label: item.name, description: item.cid }))} value={multiA} onChange={onMultiA} placeholder="Pesquisar por nome ou CID" />
+              <SearchableSelect label="Doença" multiple options={conditions.filter((item) => item.status === 'Ativa').map((item) => ({ value: item.name, label: item.name, description: item.cid }))} value={multiA} onChange={onMultiA} placeholder="Pesquisar por nome ou CID" />
             </div>
             {extra !== 'Todos' && extra !== 'Sem empresa' && <div className="filter-field">
               <span>Setor</span>
-              <SearchableSelect label="Setor" multiple allowCustom={false} options={unique([...(companies.find((item) => item.name === extra)?.sectors?.map((sector) => sector.name) ?? []), ...cases.filter((item) => item.company === extra).map((item) => item.sector ?? '')]).map((name) => ({ value: name, label: name }))} value={multiB} onChange={onMultiB} placeholder="Pesquisar setores da empresa" />
+              <SearchableSelect label="Setor" multiple options={unique([...(companies.find((item) => item.name === extra)?.sectors?.map((sector) => sector.name) ?? []), ...cases.filter((item) => item.company === extra).map((item) => item.sector ?? '')]).map((name) => ({ value: name, label: name }))} value={multiB} onChange={onMultiB} placeholder="Pesquisar setores da empresa" />
             </div>}
             <div className="filter-field">
               <span>Atividade principal</span>
-              <SearchableSelect label="Atividade principal" multiple allowCustom={false} options={unique([...(extra === 'Todos' || extra === 'Sem empresa' ? unlinkedActivities : companyActivities[extra] ?? []), ...cases.filter((item) => extra === 'Todos' || extra === 'Sem empresa' ? !item.company : item.company === extra).flatMap((item) => item.activity.split(', '))]).map((name) => ({ value: name, label: name }))} value={activities} onChange={onActivities} placeholder="Pesquisar atividades" />
+              <SearchableSelect label="Atividade principal" multiple options={unique([...(extra === 'Todos' || extra === 'Sem empresa' ? unlinkedActivities : companyActivities[extra] ?? []), ...cases.filter((item) => extra === 'Todos' || extra === 'Sem empresa' ? !item.company : item.company === extra).flatMap((item) => item.activity.split(', '))]).map((name) => ({ value: name, label: name }))} value={activities} onChange={onActivities} placeholder="Pesquisar atividades" />
             </div>
           </>
         )}
         {view === "conditions" && (
           <>
-            <div className="filter-field"><span>Região corporal</span><SearchableSelect label="Região corporal" multiple allowCustom={false} options={bodyRegions.map((name) => ({ value: name, label: name }))} value={multiA} onChange={onMultiA} placeholder="Pesquisar regiões" /></div>
+            <div className="filter-field"><span>Região corporal</span><SearchableSelect label="Região corporal" multiple options={bodyRegions.map((name) => ({ value: name, label: name }))} value={multiA} onChange={onMultiA} placeholder="Pesquisar regiões" /></div>
             <label className="filter-field">
               <span>Tipo da condição</span>
               <select
