@@ -345,6 +345,7 @@ export function CaseWorkflow({
                   <Field label="Setor da empresa" required>
                     <SearchableSelect label="Setor da empresa" options={sectorOptions}
                       disabled={readOnly || !state.company}
+                      allowCustom={false}
                       value={state.isOtherSector ? "__other_sector__" : state.sector}
                       onChange={(values) => {
                         const sector = values[0] ?? '';
@@ -481,6 +482,7 @@ export function CaseWorkflow({
               />
               <Field label="Selecionar atividade" required>
                 <SearchableSelect label={`Atividade ${index + 1}`} options={[...activityOptions.map((name) => ({ value: name, label: name })), { value: '__other__', label: 'Outros', description: 'Informar uma atividade não cadastrada' }]}
+                  allowCustom={false}
                   disabled={
                     readOnly || (state.associatedCompany && !state.company)
                   }

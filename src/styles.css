@@ -1307,7 +1307,14 @@ td > small {
 .selection-option small { color: #5b7669; font-size: 11px; }
 .selection-option.is-active, .selection-option[aria-selected=true] { background: #edf6f1; }
 .selection-option[aria-selected=true] { color: #217855; }
+.selection-option-custom { border-top: 1px solid #dce9e2; color: #2e8f6b; }
 .selection-empty { padding: 12px; color: #6c7f76; }
+.selection-custom { display: grid; gap: 10px; padding: 14px; color: #365e50; font-size: 12px; }
+.selection-custom > label { font-weight: 700; }
+.selection-custom > div { display: flex; gap: 8px; }
+.selection-custom input { min-width: 0; flex: 1; min-height: 40px; padding: 0 10px; border: 1px solid #b8d4c8; border-radius: 8px; font: inherit; }
+.selection-custom .secondary-button { min-height: 40px; }
+.selection-custom-cancel { justify-self: start; border: 0; padding: 0; background: transparent; color: #477264; font: inherit; text-decoration: underline; cursor: pointer; }
 .searchable-select.is-disabled .selection-control { background: #f5f8f6; }
 .searchable-select.is-disabled .selection-values input { display: none; }
 .searchable-select.is-disabled .selection-toggle { visibility: hidden; }

@@ -129,7 +129,7 @@ export function CompanyWorkflow({
             </p>
             <div className="case-linker">
               <label>Casos do usuário sem vinculação com empresa</label>
-              <SearchableSelect label="Casos associados" multiple disabled={readOnly} options={eligibleCases.map((entry) => ({ value: entry.id, label: entry.name, description: `${entry.id} · ${entry.injury}` }))} value={linked} onChange={(values) => { setLinked(values); setSectors((items) => items.map((sector) => ({ ...sector, caseIds: sector.caseIds.filter((id) => values.includes(id)) }))); }} placeholder="Pesquisar e selecionar casos" />
+              <SearchableSelect label="Casos associados" multiple allowCustom={false} disabled={readOnly} options={eligibleCases.map((entry) => ({ value: entry.id, label: entry.name, description: `${entry.id} · ${entry.injury}` }))} value={linked} onChange={(values) => { setLinked(values); setSectors((items) => items.map((sector) => ({ ...sector, caseIds: sector.caseIds.filter((id) => values.includes(id)) }))); }} placeholder="Pesquisar e selecionar casos" />
             </div>
           </div>
         )}
@@ -188,7 +188,7 @@ export function CompanyWorkflow({
                 </Field>
                 <div className="case-linker sector-cases">
                   <label>Associar casos da empresa sem setor</label>
-                  <SearchableSelect label={`Casos do setor ${index + 1}`} multiple disabled={readOnly} options={linkedCases.filter((entry) => !assigned.has(entry.id) || sector.caseIds.includes(entry.id)).map((entry) => ({ value: entry.id, label: entry.name, description: entry.id }))} value={sector.caseIds} onChange={(values) => setSectors((items) => items.map((current) => current.id === sector.id ? { ...current, caseIds: values } : current))} placeholder="Pesquisar casos sem setor" />
+                  <SearchableSelect label={`Casos do setor ${index + 1}`} multiple allowCustom={false} disabled={readOnly} options={linkedCases.filter((entry) => !assigned.has(entry.id) || sector.caseIds.includes(entry.id)).map((entry) => ({ value: entry.id, label: entry.name, description: entry.id }))} value={sector.caseIds} onChange={(values) => setSectors((items) => items.map((current) => current.id === sector.id ? { ...current, caseIds: values } : current))} placeholder="Pesquisar casos sem setor" />
                 </div>
               </article>
             ))}
