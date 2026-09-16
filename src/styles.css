@@ -1295,6 +1295,8 @@ td > small {
 .selection-chip > button, .selection-clear, .selection-toggle { display: grid; place-items: center; flex-shrink: 0; width: 28px; height: 28px; border: 0; padding: 0; background: transparent; color: #59786b; border-radius: 5px; cursor: pointer; }
 .selection-chip > button { width: 20px; height: 20px; }
 .selection-single { color: #153e33; overflow-wrap: anywhere; }
+.selection-single-trigger { flex: 1; min-width: 0; padding: 0; border: 0; background: transparent; text-align: left; font: inherit; font-weight: 600; cursor: pointer; }
+.selection-single-trigger:hover { color: #217855; }
 .selection-clear:hover, .selection-toggle:hover, .selection-chip > button:hover { background: #d9ebe2; }
 .selection-popup { position: absolute; top: calc(100% + 6px); left: 0; right: 0; z-index: 25; background: #fff; border: 1px solid #d4e3db; border-radius: 12px; box-shadow: 0 12px 32px #133d3320; overflow: hidden; }
 .selection-hint { display: flex; align-items: center; gap: 6px; padding: 11px 12px; font-size: 11px; color: #5d756a; background: #f5f9f7; }
