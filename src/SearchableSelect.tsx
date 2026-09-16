@@ -42,6 +42,7 @@ export function SearchableSelect({ label, options, value, onChange, multiple = f
           {selected.map((entry) => {
             const selectedLabel = options.find((option) => option.value === entry)?.label ?? entry;
             if (!multiple && !open && !disabled) return <button className="selection-single selection-single-trigger" type="button" key={entry} aria-label={`Alterar ${label}: ${selectedLabel}`} aria-haspopup="listbox" aria-expanded={false} onClick={openAndFocus}>{selectedLabel}</button>;
+            if (!multiple && open) return null;
             return <span className={multiple ? 'selection-chip' : 'selection-single'} key={entry}>
               {selectedLabel}
               {multiple && !disabled && <button type="button" aria-label={`Remover ${selectedLabel}`} onClick={() => onChange(selected.filter((item) => item !== entry))}><X size={12} /></button>}
@@ -49,7 +50,7 @@ export function SearchableSelect({ label, options, value, onChange, multiple = f
           })}
           {(multiple || !selected.length || open) && <input ref={input} role="combobox" aria-label={label} aria-expanded={open && !disabled} aria-controls={`${id}-list`} aria-autocomplete="list"
             aria-activedescendant={open && matches.length ? `${id}-option-${Math.min(active, matches.length - 1)}` : undefined}
-            disabled={disabled} autoComplete="off" placeholder={selected.length ? 'Pesquisar…' : placeholder}
+            disabled={disabled} autoComplete="off" placeholder={selected.length && !multiple ? 'Pesquisar para substituir…' : selected.length ? 'Pesquisar…' : placeholder}
             value={query} onFocus={() => { setOpen(true); setActive(0); }} onClick={() => setOpen(true)}
             onChange={(event) => { setQuery(event.target.value); setActive(0); setOpen(true); }}
             onKeyDown={(event) => {
@@ -62,7 +63,7 @@ export function SearchableSelect({ label, options, value, onChange, multiple = f
       <button ref={toggle} type="button" className="selection-toggle" disabled={disabled} aria-label={`${open ? 'Fechar' : 'Abrir'} opções de ${label}`} aria-haspopup="listbox" aria-expanded={open && !disabled} onClick={() => { if (open) { setOpen(false); setQuery(''); } else openAndFocus(); }}><ChevronDown size={16} /></button>
     </div>
     {open && !disabled && <div className="selection-popup">
-      <div className="selection-hint"><Search size={13} aria-hidden="true" /> Digite para pesquisar{multiple ? ' · Selecione um ou mais itens' : ''}</div>
+      <div className="selection-hint"><Search size={13} aria-hidden="true" /> {multiple ? 'Digite para pesquisar · Selecione um ou mais itens' : selected.length ? 'Pesquise e selecione outra opção para substituir a atual' : 'Digite para pesquisar'}</div>
       <div id={`${id}-list`} role="listbox" aria-label={`Opções de ${label}`} aria-multiselectable={multiple}>
         {matches.map((option, index) => <button id={`${id}-option-${index}`} key={option.value} type="button" role="option" aria-selected={selected.includes(option.value)}
           className={`selection-option ${active === index ? 'is-active' : ''}`} onMouseDown={(event) => event.preventDefault()} onMouseEnter={() => setActive(index)} onClick={() => choose(option)}>
