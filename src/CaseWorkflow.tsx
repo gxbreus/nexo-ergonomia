@@ -53,6 +53,7 @@ export type CaseWorkflowState = {
   associatedCompany: boolean;
   company: string;
   associatedSector: boolean;
+  isOtherSector: boolean;
   sector: string;
   conditions: ConditionEntry[];
   activities: ActivityEntry[];
@@ -60,13 +61,14 @@ export type CaseWorkflowState = {
 };
 
 function emptyState(item?: CaseWorkflowRecord): CaseWorkflowState {
-  if (item?.workflow) return { ...item.workflow, disease: item.workflow.disease ?? item.injury, conditions: item.workflow.conditions.slice(0, 1) };
+  if (item?.workflow) return { ...item.workflow, disease: item.workflow.disease ?? item.injury, isOtherSector: item.workflow.isOtherSector ?? false, conditions: item.workflow.conditions.slice(0, 1) };
   return {
     name: item?.name ?? "",
     disease: item?.injury ?? '',
     associatedCompany: Boolean(item?.company),
     company: item?.company ?? "",
     associatedSector: Boolean(item?.sector),
+    isOtherSector: false,
     sector: item?.sector ?? "",
     conditions: [
       {
@@ -102,7 +104,7 @@ export function CaseWorkflow({
   const [state, setState] = useState<CaseWorkflowState>(() => {
     if (!readOnly && typeof window !== "undefined") {
       const stored = window.sessionStorage.getItem(draftKey);
-      if (stored) { const restored = JSON.parse(stored) as CaseWorkflowState; return { ...restored, disease: restored.disease ?? item?.injury ?? '', conditions: restored.conditions.slice(0, 1) }; }
+      if (stored) { const restored = JSON.parse(stored) as CaseWorkflowState; return { ...restored, disease: restored.disease ?? item?.injury ?? '', isOtherSector: restored.isOtherSector ?? false, conditions: restored.conditions.slice(0, 1) }; }
     }
     return emptyState(item);
   });
@@ -128,6 +130,14 @@ export function CaseWorkflow({
     state.associatedCompany && state.company
       ? (companies.find((company) => company.name === state.company)?.sectors?.map((sector) => sector.name) ?? sectorsByCompany[state.company] ?? [])
       : [];
+  const sectorOptions = [
+    ...sectors.map((name) => ({ value: name, label: name })),
+    {
+      value: "__other_sector__",
+      label: "Outro setor",
+      description: "Informar manualmente para este caso",
+    },
+  ];
   const activityHours = (activity: ActivityEntry) =>
     Number(activity.answers.AT06 || 0);
   const maxHours = Math.max(...state.activities.map(activityHours), 0);
@@ -154,7 +164,7 @@ export function CaseWorkflow({
     if (state.associatedCompany && !state.company)
       nextErrors.push("Selecione a empresa associada.");
     if (state.associatedSector && !state.sector)
-      nextErrors.push("Selecione o setor da empresa.");
+      nextErrors.push(state.isOtherSector ? "Informe qual é o setor." : "Selecione o setor da empresa.");
     if (state.conditions.some((entry) => entry.answers.COND02 === 'Sim' && !entry.answers.COND03))
       nextErrors.push('Selecione o diagnóstico específico de cada condição marcada como diagnosticada.');
     if (state.activities.some((entry) => entry.answers.AT02 !== 'Ainda realiza' && entry.answers.AT01 && entry.answers.AT02 && String(entry.answers.AT02) < String(entry.answers.AT01)))
@@ -213,7 +223,7 @@ export function CaseWorkflow({
       injury: conditionName,
       cid,
       company: state.associatedCompany ? state.company : "",
-      sector: state.associatedSector ? state.sector : "",
+      sector: state.associatedSector ? state.sector.trim() : "",
       activity: principals,
       status: draft ? "Em cadastro" : "Concluído",
       score,
@@ -289,6 +299,7 @@ export function CaseWorkflow({
                 associatedCompany: !state.associatedCompany,
                 company: "",
                 associatedSector: false,
+                isOtherSector: false,
                 sector: "",
                 activities: state.activities.map((entry) => ({
                   ...entry,
@@ -307,6 +318,7 @@ export function CaseWorkflow({
                     patch({
                       company: values[0] ?? '',
                       associatedSector: false,
+                      isOtherSector: false,
                       sector: "",
                       activities: state.activities.map((entry) => ({
                         ...entry,
@@ -323,17 +335,42 @@ export function CaseWorkflow({
                 onChange={() =>
                   patch({
                     associatedSector: !state.associatedSector,
+                    isOtherSector: false,
                     sector: "",
                   })
                 }
               />
               {state.associatedSector && (
-                <Field label="Setor da empresa" required>
-                  <SearchableSelect label="Setor da empresa" options={sectors.map((name) => ({ value: name, label: name }))}
-                    disabled={readOnly || !state.company}
-                    value={state.sector}
-                    onChange={(values) => patch({ sector: values[0] ?? '' })} placeholder="Pesquisar setor" />
-                </Field>
+                <>
+                  <Field label="Setor da empresa" required>
+                    <SearchableSelect label="Setor da empresa" options={sectorOptions}
+                      disabled={readOnly || !state.company}
+                      value={state.isOtherSector ? "__other_sector__" : state.sector}
+                      onChange={(values) => {
+                        const sector = values[0] ?? '';
+                        patch(
+                          sector === "__other_sector__"
+                            ? { isOtherSector: true, sector: "" }
+                            : { isOtherSector: false, sector },
+                        );
+                      }} placeholder="Pesquisar setor" />
+                  </Field>
+                  {state.isOtherSector && (
+                    <Field label="Qual é o setor?" required>
+                      <input
+                        aria-describedby="other-sector-help"
+                        disabled={readOnly}
+                        maxLength={255}
+                        onChange={(event) => patch({ sector: event.target.value })}
+                        placeholder="Ex.: Laboratório de protótipos"
+                        value={state.sector}
+                      />
+                      <small className="field-helper" id="other-sector-help">
+                        Esse nome será salvo neste caso e não altera o catálogo da empresa.
+                      </small>
+                    </Field>
+                  )}
+                </>
               )}
               </>}
             </div>

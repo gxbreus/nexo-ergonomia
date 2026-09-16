@@ -104,6 +104,7 @@ const workflow = (item: MockCase): CaseWorkflowState => {
     associatedCompany: true,
     company: item.company,
     associatedSector: true,
+    isOtherSector: false,
     sector: item.sector,
     conditions: [{ id: conditionId, answers: conditionAnswers(item) }],
     activities: [

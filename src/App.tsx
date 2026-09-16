@@ -493,10 +493,10 @@ export default function App() {
                       ...caseItem,
                       company: item.name,
                       sector: sectorByCase.get(caseItem.id) ?? "",
-                      workflow: caseItem.workflow ? { ...caseItem.workflow, associatedCompany: true, company: item.name, associatedSector: sectorByCase.has(caseItem.id), sector: sectorByCase.get(caseItem.id) ?? "" } : undefined,
+                      workflow: caseItem.workflow ? { ...caseItem.workflow, associatedCompany: true, company: item.name, associatedSector: sectorByCase.has(caseItem.id), isOtherSector: false, sector: sectorByCase.get(caseItem.id) ?? "" } : undefined,
                     }
                   : previousCompany && caseItem.company === previousCompany.name
-                    ? { ...caseItem, company: "", sector: "", workflow: caseItem.workflow ? { ...caseItem.workflow, associatedCompany: false, company: "", associatedSector: false, sector: "" } : undefined }
+                    ? { ...caseItem, company: "", sector: "", workflow: caseItem.workflow ? { ...caseItem.workflow, associatedCompany: false, company: "", associatedSector: false, isOtherSector: false, sector: "" } : undefined }
                     : caseItem,
               ),
             );
